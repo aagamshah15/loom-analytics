@@ -1,0 +1,21 @@
+cleaning:
+  numeric_missing_strategy: median
+  categorical_missing_strategy: mode
+  date_missing_strategy: forward_fill
+  duplicate_strategy: drop_duplicates
+  case_strategy: lower
+  categorical_fill_value: UNKNOWN
+  auto_convert_numeric_strings: true
+  numeric_parse_threshold: 0.8
+
+analysis:
+  correlation_threshold: 0.7
+  scatter_threshold: 0.5
+  outlier_zscore_threshold: 3.0
+  anomaly_zscore_threshold: 3.5
+  skew_flag_threshold: 1.0
+  severe_skew_threshold: 2.0
+  top_n_segments: 5
+
+visualization:
+  max_charts: 8

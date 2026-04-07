@@ -1,0 +1,11 @@
+Date,Region,Product,Revenue,Units,SalesRep
+2026-02-01,North,Widget,1200,12,Ana
+2026-02-02,South,Widget,,11,Ben
+2026-02-03,East,Gadget,1350,,Cara
+2026-02-04,West,Gadget,1400,14,
+2026-02-05,North,Widget,,15,Ana
+2026-02-06,South,Gizmo,1600,,Ben
+2026-02-07,East,Gizmo,1700,17,
+2026-02-08,West,Gizmo,,18,Cara
+2026-02-09,North,Widget,1800,19,Ana
+2026-02-10,South,Gadget,,20,

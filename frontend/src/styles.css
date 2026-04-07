@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --loom-bg: #fafaf9;
+    --loom-paper: #ffffff;
+    --loom-paper-soft: #f5f5f4;
+    --loom-border: #e7e5e4;
+    --loom-border-strong: #d6d3d1;
+    --loom-ink: #1c1917;
+    --loom-muted: #78716c;
+    --loom-muted-soft: #a8a29e;
+    --loom-accent: #c2410c;
+    --loom-accent-soft: #ffedd5;
+    --loom-espresso: #292524;
+    --loom-cream: #fafaf9;
+    --loom-shadow: 0 18px 60px rgba(28, 25, 23, 0.08);
+  }
+
+  html {
+    font-family: Inter, Geist, system-ui, sans-serif;
+    background: var(--loom-bg);
+  }
+
+  body {
+    @apply text-stone-900 antialiased;
+    background:
+      radial-gradient(circle at top left, rgba(234, 88, 12, 0.12), transparent 24%),
+      radial-gradient(circle at 85% 12%, rgba(251, 191, 36, 0.1), transparent 20%),
+      linear-gradient(180deg, #fafaf9 0%, #f7f4ef 52%, #fafaf9 100%);
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    @apply outline-none ring-2 ring-orange-500 ring-offset-2 ring-offset-stone-50;
+  }
+
+  input[type="range"] {
+    accent-color: var(--loom-accent);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply border backdrop-blur;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: var(--loom-border);
+    box-shadow: var(--loom-shadow);
+    border-radius: 28px;
+  }
+
+  .panel-soft {
+    @apply border;
+    background: rgba(245, 245, 244, 0.78);
+    border-color: rgba(214, 211, 209, 0.85);
+    border-radius: 24px;
+  }
+
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+    background: var(--loom-espresso);
+    color: var(--loom-cream);
+    box-shadow: 0 10px 24px rgba(41, 37, 36, 0.16);
+  }
+
+  .primary-button:hover {
+    background: #1c1917;
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+    border-color: var(--loom-border-strong);
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--loom-ink);
+  }
+
+  .secondary-button:hover {
+    background: rgba(245, 245, 244, 0.9);
+  }
+
+  .ghost-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 font-medium transition;
+    color: var(--loom-muted);
+  }
+
+  .ghost-button:hover {
+    background: rgba(245, 245, 244, 0.95);
+    color: var(--loom-ink);
+  }
+
+  .section-heading {
+    @apply text-xs font-bold uppercase;
+    color: var(--loom-accent);
+    letter-spacing: 0.28em;
+  }
+
+  .editorial-heading {
+    @apply font-display tracking-tight text-stone-900;
+  }
+
+  .kicker {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase;
+    border-color: rgba(214, 211, 209, 0.95);
+    background: rgba(245, 245, 244, 0.82);
+    color: var(--loom-muted);
+    letter-spacing: 0.24em;
+  }
+
+  .loom-input {
+    @apply w-full rounded-2xl border px-4 py-3 text-sm text-stone-900;
+    border-color: var(--loom-border);
+    background: rgba(245, 245, 244, 0.82);
+  }
+
+  .loom-textarea {
+    @apply w-full rounded-2xl border px-4 py-3 text-sm text-stone-900;
+    border-color: var(--loom-border);
+    background: rgba(245, 245, 244, 0.82);
+    min-height: 132px;
+  }
+
+  .loom-chip {
+    @apply rounded-full border px-3 py-1 text-xs font-semibold uppercase;
+    border-color: rgba(234, 88, 12, 0.16);
+    background: rgba(255, 237, 213, 0.72);
+    color: #9a3412;
+    letter-spacing: 0.18em;
+  }
+
+  .metric-card {
+    @apply border p-5;
+    border-color: rgba(214, 211, 209, 0.9);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 245, 244, 0.9));
+    border-radius: 24px;
+  }
+
+  .grid-wash {
+    background-image:
+      linear-gradient(rgba(214, 211, 209, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(214, 211, 209, 0.3) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+}
