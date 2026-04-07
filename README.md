@@ -182,6 +182,13 @@ Recommended hosting split:
 - Netlify for the React frontend
 - Render for the FastAPI backend
 
+Recommended order:
+
+1. Deploy the backend on Render and copy its public URL
+2. Deploy the frontend on Netlify with `VITE_API_BASE_URL` pointed at that Render URL
+3. Update `APP_CORS_ORIGINS` on Render to your final Netlify site URL
+4. Redeploy the Render service once after the Netlify URL is known
+
 ### Netlify frontend
 
 This repo includes [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/netlify.toml), so Netlify can build the frontend from the repo root without extra manual build settings.
@@ -211,6 +218,18 @@ APP_CORS_ORIGIN_REGEX=https://.*--your-netlify-site.netlify.app
 ```
 
 Use the regex only if you also want Netlify preview deploys to talk to the backend.
+
+### Fast path
+
+1. In Render, create a new Blueprint or Web Service from [loom-analytics](https://github.com/aagamshah15/loom-analytics)
+2. Approve the settings from [render.yaml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/render.yaml)
+3. Set `APP_CORS_ORIGINS` temporarily to your expected Netlify site URL, or update it right after Netlify gives you the final URL
+4. Wait for the backend health check at `/api/health` to pass
+5. In Netlify, import the same repo
+6. Keep the repo-root [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/netlify.toml) settings
+7. Set `VITE_API_BASE_URL=https://your-render-service.onrender.com`
+8. Deploy the frontend
+9. If Netlify gives you a different final site URL than expected, update `APP_CORS_ORIGINS` in Render and redeploy once
 
 ### Ongoing updates
 
