@@ -8,6 +8,18 @@ from pipeline.business.ecommerce_dashboard import (
     build_ecommerce_insight_candidates,
     dashboard_section_options as ecommerce_section_options,
 )
+from pipeline.business.healthcare_dashboard import (
+    analyze_healthcare_context,
+    build_business_dashboard as build_healthcare_dashboard,
+    build_healthcare_insight_candidates,
+    dashboard_section_options as healthcare_section_options,
+)
+from pipeline.business.hr_dashboard import (
+    analyze_hr_context,
+    build_business_dashboard as build_hr_dashboard,
+    build_hr_insight_candidates,
+    dashboard_section_options as hr_section_options,
+)
 from pipeline.business.financial_dashboard import (
     analyze_financial_context,
     build_business_dashboard as build_financial_dashboard,
@@ -36,6 +48,24 @@ def detect_business_context(context: PipelineContext) -> Optional[dict[str, Any]
             "confidence": 0.92,
         }
 
+    healthcare = analyze_healthcare_context(context)
+    if healthcare is not None:
+        return {
+            "kind": "healthcare_medical",
+            "analysis": healthcare,
+            "display_name": "Healthcare / Medical",
+            "confidence": 0.91,
+        }
+
+    hr = analyze_hr_context(context)
+    if hr is not None:
+        return {
+            "kind": "hr_workforce",
+            "analysis": hr,
+            "display_name": "HR / Workforce",
+            "confidence": 0.9,
+        }
+
     return None
 
 
@@ -60,6 +90,26 @@ def analyze_for_kind(context: PipelineContext, kind: str) -> Optional[dict[str, 
             "display_name": "E-commerce / Retail",
             "confidence": 0.92,
         }
+    if kind == "healthcare_medical":
+        analysis = analyze_healthcare_context(context)
+        if analysis is None:
+            return None
+        return {
+            "kind": "healthcare_medical",
+            "analysis": analysis,
+            "display_name": "Healthcare / Medical",
+            "confidence": 0.91,
+        }
+    if kind == "hr_workforce":
+        analysis = analyze_hr_context(context)
+        if analysis is None:
+            return None
+        return {
+            "kind": "hr_workforce",
+            "analysis": analysis,
+            "display_name": "HR / Workforce",
+            "confidence": 0.9,
+        }
     if kind == "generic":
         return {
             "kind": "generic",
@@ -75,6 +125,10 @@ def build_insight_candidates(kind: str, analysis: dict[str, Any], user_prompt: s
         return build_financial_insight_candidates(analysis, user_prompt)
     if kind == "ecommerce_orders":
         return build_ecommerce_insight_candidates(analysis, user_prompt)
+    if kind == "healthcare_medical":
+        return build_healthcare_insight_candidates(analysis, user_prompt)
+    if kind == "hr_workforce":
+        return build_hr_insight_candidates(analysis, user_prompt)
     return {"insights": [], "focus_tags": []}
 
 
@@ -99,6 +153,20 @@ def build_dashboard(
             user_prompt=user_prompt,
             settings=settings,
         )
+    if kind == "healthcare_medical":
+        return build_healthcare_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_insight_ids,
+            user_prompt=user_prompt,
+            settings=settings,
+        )
+    if kind == "hr_workforce":
+        return build_hr_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_insight_ids,
+            user_prompt=user_prompt,
+            settings=settings,
+        )
     return None
 
 
@@ -107,6 +175,10 @@ def section_options(kind: str) -> dict[str, str]:
         return financial_section_options()
     if kind == "ecommerce_orders":
         return ecommerce_section_options()
+    if kind == "healthcare_medical":
+        return healthcare_section_options()
+    if kind == "hr_workforce":
+        return hr_section_options()
     return {}
 
 
@@ -143,6 +215,36 @@ def workflow_overview(kind: str, analysis: dict[str, Any]) -> dict[str, Any]:
                 ("Return Rate", f"{summary['return_rate']:.1f}%"),
             ],
         }
+    if kind == "healthcare_medical":
+        summary = analysis["summary"]
+        return {
+            "title": "Healthcare dataset detected",
+            "blurb": (
+                "This looks like patient-level healthcare data, so Loom is surfacing hidden patterns around adherence, "
+                "care delivery, follow-up effectiveness, payer risk, and measurable equity gaps."
+            ),
+            "metrics": [
+                ("Patients", f"{summary['patient_count']:,}"),
+                ("Readmission Rate", f"{summary['overall_readmission_rate']:.1f}%"),
+                ("Satisfaction", f"{summary['avg_satisfaction']:.2f}"),
+                ("Average Cost", f"${summary['avg_cost']:,.0f}"),
+            ],
+        }
+    if kind == "hr_workforce":
+        summary = analysis["summary"]
+        return {
+            "title": "HR dataset detected",
+            "blurb": (
+                "This looks like workforce data, so Loom is surfacing retention, pay equity, training, remote-work, "
+                "and department-risk patterns that are easy to miss in standard HR reporting."
+            ),
+            "metrics": [
+                ("Employees", f"{summary['employee_count']:,}"),
+                ("Attrition Rate", f"{summary['overall_attrition_rate']:.1f}%"),
+                ("Avg Engagement", f"{summary['avg_engagement']:.2f}"),
+                ("Average Salary", f"${summary['avg_salary']:,.0f}"),
+            ],
+        }
     return {"title": "Dataset detected", "blurb": "", "metrics": []}
 
 
@@ -151,6 +253,10 @@ def default_dashboard_title(kind: str) -> str:
         return "Hidden Market Structure"
     if kind == "ecommerce_orders":
         return "E-commerce Hidden Insights"
+    if kind == "healthcare_medical":
+        return "Healthcare Hidden Insights"
+    if kind == "hr_workforce":
+        return "HR Workforce Hidden Insights"
     return "Business Dashboard"
 
 
@@ -172,7 +278,7 @@ def template_catalog() -> list[dict[str, Any]]:
             "kind": "healthcare_medical",
             "label": "Healthcare / Medical",
             "description": "Patient, treatment, cost, and outcome datasets.",
-            "implemented": False,
+            "implemented": True,
         },
         {
             "kind": "marketing_campaign",
@@ -184,7 +290,7 @@ def template_catalog() -> list[dict[str, Any]]:
             "kind": "hr_workforce",
             "label": "HR / Workforce",
             "description": "Employee, department, tenure, salary, and attrition data.",
-            "implemented": False,
+            "implemented": True,
         },
         {
             "kind": "survey_sentiment",

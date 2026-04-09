@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Info, Sparkles, Wand2, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, House, Info, Sparkles, Wand2, XCircle } from "lucide-react";
 import { RunSummary } from "./RunSummary";
 import type { AnalyzeReport, InsightCandidate } from "../types";
 import { cn } from "../lib/cn";
@@ -15,7 +15,10 @@ type InsightReviewProps = {
   onApproveAll: () => void;
   onRejectAll: () => void;
   focusTags: string[];
+  onBackToTemplate: () => void;
+  onBackToLanding: () => void;
   onBuildDashboard: () => void;
+  isApplyingPrompt: boolean;
   isBuilding: boolean;
   approvedCount: number;
 };
@@ -32,13 +35,27 @@ export function InsightReview({
   onApproveAll,
   onRejectAll,
   focusTags,
+  onBackToTemplate,
+  onBackToLanding,
   onBuildDashboard,
+  isApplyingPrompt,
   isBuilding,
   approvedCount,
 }: InsightReviewProps) {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" data-testid="review-screen">
       <div className="mx-auto w-full max-w-7xl px-6 py-10">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button className="ghost-button" data-testid="back-to-template-button" onClick={onBackToTemplate}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to template
+          </button>
+          <button className="ghost-button" data-testid="start-over-review-button" onClick={onBackToLanding}>
+            <House className="h-4 w-4" />
+            Start over
+          </button>
+        </div>
+
         <div className="mb-8">
           <RunSummary inputName={inputName} report={report} />
         </div>
@@ -54,15 +71,20 @@ export function InsightReview({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button className="secondary-button" onClick={onApproveAll}>
+            <button className="secondary-button" data-testid="approve-all-button" onClick={onApproveAll}>
               <CheckCircle2 className="h-4 w-4" />
               Approve all
             </button>
-            <button className="secondary-button" onClick={onRejectAll}>
+            <button className="secondary-button" data-testid="reject-all-button" onClick={onRejectAll}>
               <XCircle className="h-4 w-4" />
               Reject all
             </button>
-            <button className="primary-button" disabled={approvedCount === 0 || isBuilding} onClick={onBuildDashboard}>
+            <button
+              className="primary-button"
+              data-testid="build-dashboard-button"
+              disabled={approvedCount === 0 || isBuilding}
+              onClick={onBuildDashboard}
+            >
               {isBuilding ? "Building..." : "Build dashboard"}
               <ArrowRight className="h-4 w-4" />
             </button>
@@ -82,6 +104,7 @@ export function InsightReview({
             </div>
             <textarea
               className="loom-textarea"
+              data-testid="review-prompt-input"
               onChange={(event) => onPromptChange(event.target.value)}
               placeholder="Example: focus on volatility, make this executive-friendly, or emphasize discount inefficiency."
               value={userPrompt}
@@ -94,9 +117,9 @@ export function InsightReview({
                   </span>
                 ))}
               </div>
-              <button className="secondary-button" onClick={onApplyPrompt}>
+              <button className="secondary-button" data-testid="apply-instructions-button" disabled={isApplyingPrompt} onClick={onApplyPrompt}>
                 <Sparkles className="h-4 w-4" />
-                Apply instructions
+                {isApplyingPrompt ? "Refreshing..." : "Apply instructions"}
               </button>
             </div>
           </div>
@@ -108,7 +131,8 @@ export function InsightReview({
               <StatusCard label="Rejected" tone="default" value={insights.length - approvedCount} />
             </div>
             <div className="mt-4 rounded-2xl border border-stone-200 bg-[#f5f5f4]/85 px-4 py-4 text-sm leading-6 text-stone-600">
-              The builder uses only the approved insight set as its blueprint. You can still reorder sections later.
+              The builder uses only the approved insight set as its blueprint. Applying new instructions refreshes the
+              suggested approvals.
             </div>
           </div>
         </div>
@@ -122,6 +146,7 @@ export function InsightReview({
                   "panel p-6 transition",
                   approved ? "border-[#fdba74] shadow-sm" : "border-stone-200 opacity-75"
                 )}
+                data-testid={`insight-card-${insight.id}`}
                 key={insight.id}
               >
                 <div className="mb-5 flex items-start justify-between gap-4">
@@ -138,6 +163,7 @@ export function InsightReview({
                       "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition",
                       approved ? "bg-[#292524] text-[#fafaf9]" : "border border-stone-200 bg-white text-stone-700"
                     )}
+                    data-testid={`toggle-insight-${insight.id}`}
                     onClick={() => onToggleInsight(insight.id, !approved)}
                   >
                     {approved ? <CheckCircle2 className="h-4 w-4" /> : <Info className="h-4 w-4" />}

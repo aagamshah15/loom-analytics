@@ -110,7 +110,10 @@ def regenerate_review(payload: dict[str, Any]) -> dict[str, Any]:
     if not kind or analysis is None:
         raise HTTPException(status_code=400, detail="kind and analysis are required.")
 
-    review = build_insight_candidates(kind, analysis, user_prompt)
+    try:
+        review = build_insight_candidates(kind, analysis, user_prompt)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid analysis payload for template '{kind}'.") from exc
     return jsonable_encoder(review)
 
 
@@ -125,13 +128,16 @@ def build_dashboard_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     if not kind or analysis is None:
         raise HTTPException(status_code=400, detail="kind and analysis are required.")
 
-    dashboard = build_dashboard(
-        kind=kind,
-        analysis=analysis,
-        approved_insight_ids=approved_insight_ids,
-        user_prompt=user_prompt,
-        settings=settings,
-    )
+    try:
+        dashboard = build_dashboard(
+            kind=kind,
+            analysis=analysis,
+            approved_insight_ids=approved_insight_ids,
+            user_prompt=user_prompt,
+            settings=settings,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid analysis payload for template '{kind}'.") from exc
     if dashboard is None:
         raise HTTPException(status_code=400, detail="Unable to build dashboard for this template.")
 

@@ -15,11 +15,11 @@ The product flow is now geared toward business users: upload a CSV, detect the r
 - Streamlit prototype for quick iteration
 - React/Vite frontend for the proper product UI
 - FastAPI API for file upload, template detection, insight review, and dashboard generation
-- Specialized business templates for financial time-series and e-commerce order data
+- Specialized business templates for financial time-series, e-commerce, healthcare, and HR/workforce data
 - CLI artifacts when persistence is enabled:
-  - `report.json`
-  - `summary.md`
-  - `summary.html`
+- `report.json`
+- `summary.md`
+- `summary.html`
   - `charts/*.png`
 - YAML-driven cleaning configuration
 - Fixture-backed tests for ingestion, validation, cleaning, analysis, and end-to-end execution
@@ -35,6 +35,7 @@ The product flow is now geared toward business users: upload a CSV, detect the r
 - FastAPI for the product API
 - React + Vite + TypeScript for the product frontend
 - Tailwind CSS + Lucide + Recharts + dnd-kit for the native dashboard UI
+- Playwright for browser stress coverage
 
 ## Quick Start
 
@@ -166,6 +167,33 @@ Without `pytest`, the suite still runs with the standard library:
 python -m unittest discover -s tests
 ```
 
+Browser stress tests:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+Repo-level stress commands:
+
+```bash
+make test-ui
+make smoke-prod
+make test-stress
+```
+
+The hosted smoke runner validates:
+- Render health
+- one analyze/build pass for each implemented template
+- the live Netlify bundle points at the Render backend URL
+
+Optional overrides:
+
+```bash
+LOOM_FRONTEND_URL=https://your-frontend.example.com LOOM_BACKEND_URL=https://your-backend.example.com make smoke-prod
+```
+
 ## Troubleshooting
 
 - If `make dev` fails immediately, make sure `.venv` exists and you ran `npm install` inside [frontend](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend).
@@ -251,7 +279,7 @@ Current React workflow:
 - review deterministic hidden insights one by one and approve/reject them
 - accept additional analysis instructions through a prompt box
 - build a native React dashboard from the approved insight set using the matched business template
-- reorder dashboard sections with light drag-and-drop controls
+- reorder dashboard sections with simple up/down controls
 - switch into preview mode before export
 - download the resulting dashboard as a static `.html` file
 - review the run summary without exposing pipeline diagnostics

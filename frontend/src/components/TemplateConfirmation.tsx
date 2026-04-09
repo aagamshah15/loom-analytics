@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { ArrowRight, BarChart3, CheckCircle2, ShoppingBag, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, BriefcaseBusiness, CheckCircle2, HeartPulse, ShoppingBag, TrendingUp } from "lucide-react";
 import type { BusinessContext, TemplateOption } from "../types";
 import { cn } from "../lib/cn";
 
@@ -16,6 +16,8 @@ type TemplateConfirmationProps = {
 const TEMPLATE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   financial_timeseries: TrendingUp,
   ecommerce_orders: ShoppingBag,
+  healthcare_medical: HeartPulse,
+  hr_workforce: BriefcaseBusiness,
   generic: BarChart3,
 };
 
@@ -31,7 +33,7 @@ export function TemplateConfirmation({
   const confidence = detectedTemplate ? Math.round(detectedTemplate.confidence * 100) : 0;
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center px-6 py-16">
+    <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center px-6 py-16" data-testid="template-screen">
       <div className="panel w-full p-8 md:p-10">
         <div className="mb-8 flex flex-wrap items-center gap-3">
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
@@ -59,6 +61,7 @@ export function TemplateConfirmation({
                     : "border-stone-200 bg-white/90 hover:border-stone-300 hover:bg-stone-50/90",
                   !option.implemented && "opacity-60"
                 )}
+                data-testid={`template-option-${option.kind}`}
                 disabled={!option.implemented}
                 key={option.kind}
                 onClick={() => onSelectedKindChange(option.kind)}
@@ -85,10 +88,10 @@ export function TemplateConfirmation({
         </div>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <button className="secondary-button" disabled={isApplying} onClick={onApplyOverride}>
+          <button className="secondary-button" data-testid="apply-template-override-button" disabled={isApplying} onClick={onApplyOverride}>
             {isApplying ? "Applying..." : "Apply override"}
           </button>
-          <button className="primary-button" onClick={onContinue}>
+          <button className="primary-button" data-testid="continue-to-review-button" onClick={onContinue}>
             Continue to insight review
             <ArrowRight className="h-4 w-4" />
           </button>

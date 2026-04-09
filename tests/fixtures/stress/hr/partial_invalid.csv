@@ -1,0 +1,6 @@
+employee_id,department,performance_score,attrition,engagement_score,gender,salary,training_hours,work_mode
+e1,Engineering,4.4,1,8.9,Female,262000,52,Remote
+e2,Engineering,4.2,0,8.5,Male,299000,48,Onsite
+e3,Sales,3.8,0,6.7,Female,182000,18,Hybrid
+e4,Sales,3.6,1,6.1,Male,188000,12,Onsite
+e5,Customer Support,4.1,1,7.0,Female,97000,10,Remote

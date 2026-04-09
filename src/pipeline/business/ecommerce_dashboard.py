@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 import pandas as pd
@@ -35,6 +36,35 @@ FOCUS_KEYWORDS = {
     "categories": ["category", "clothing", "electronics", "product mix"],
     "devices": ["device", "mobile", "desktop", "tablet"],
     "customers": ["repeat", "retention", "new customer", "loyalty"],
+}
+
+PROMPT_STOP_WORDS = {
+    "about",
+    "across",
+    "after",
+    "before",
+    "build",
+    "center",
+    "dashboard",
+    "data",
+    "emphasize",
+    "focus",
+    "from",
+    "into",
+    "look",
+    "make",
+    "more",
+    "need",
+    "please",
+    "show",
+    "story",
+    "that",
+    "them",
+    "these",
+    "this",
+    "those",
+    "want",
+    "with",
 }
 
 SECTION_CONFIG = {
@@ -331,8 +361,9 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
     ]
 
     filtered = [item for item in insights if item.get("condition", True)]
+    prompt_terms = extract_prompt_terms(user_prompt)
     for item in filtered:
-        focus_bonus = 15 if any(tag in focus_tags for tag in item["tags"]) else 0
+        focus_bonus = _instruction_bonus(item, focus_tags, prompt_terms)
         item["score"] = item["priority"] + focus_bonus
         item["recommended"] = item["score"] >= 85
     filtered.sort(key=lambda item: (-item["score"], item["title"]))
@@ -417,6 +448,38 @@ def extract_focus_tags(prompt: str) -> list[str]:
         if any(keyword in lowered for keyword in keywords):
             matches.append(tag)
     return matches
+
+
+def extract_prompt_terms(prompt: str) -> list[str]:
+    lowered = prompt.strip().lower()
+    if not lowered:
+        return []
+    terms: list[str] = []
+    for token in re.findall(r"[a-z0-9]+", lowered):
+        if len(token) < 4 or token in PROMPT_STOP_WORDS:
+            continue
+        if token not in terms:
+            terms.append(token)
+    return terms
+
+
+def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms: list[str]) -> int:
+    bonus = 15 if any(tag in focus_tags for tag in item["tags"]) else 0
+    if not prompt_terms:
+        return bonus
+
+    haystack = " ".join(
+        [
+            item["title"],
+            item["summary"],
+            item["detail"],
+            item["category"],
+            item["metric_label"],
+            " ".join(item["tags"]),
+        ]
+    ).lower()
+    overlap = sum(1 for term in prompt_terms if term in haystack)
+    return bonus + min(overlap, 3) * 6
 
 
 def dashboard_section_options() -> dict[str, str]:

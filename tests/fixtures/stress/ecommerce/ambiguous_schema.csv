@@ -1,0 +1,6 @@
+order_date,order_value,category,channel,payment_method,device,discount_pct
+2024-01-05,370,Electronics,Direct,BNPL,Desktop,0
+2024-01-12,335,Clothing,Organic,PayPal,Mobile,10
+2024-01-19,332,Clothing,Organic,PayPal,Mobile,25
+2024-02-02,368,Home & Kitchen,Referral,Credit Card,Desktop,0
+2024-02-09,375,Electronics,Direct,BNPL,Desktop,0

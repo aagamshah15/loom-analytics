@@ -1,0 +1,3 @@
+date,notes,value
+2024-01-01,"This row contains a deliberately long narrative cell intended to make sure Loom does not crash or mis-detect templates when there is a lot of descriptive prose inside a single column. The goal is not natural-language understanding here, just resilience.",10
+2024-01-02,"Another long-form note with commas, punctuation, and a deliberately editorial style. It should remain generic and still parse into a normal dataframe without damaging the upload flow.",12

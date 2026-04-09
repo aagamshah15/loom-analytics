@@ -1,0 +1,6 @@
+order_date,order_value,channel,payment_method,device,discount_pct,returned
+2024-01-05,370,Direct,BNPL,Desktop,0,0
+2024-01-12,335,Organic,PayPal,Mobile,10,1
+2024-01-19,332,Organic,PayPal,Mobile,25,1
+2024-02-02,368,Referral,Credit Card,Desktop,0,0
+2024-02-09,375,Direct,BNPL,Desktop,0,0

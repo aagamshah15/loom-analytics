@@ -1,0 +1,21 @@
+worker_id,function,review_score,left_company,engagement_index,sex,job_level,base_salary,learning_hours,location_type
+e1,Engineering,4.4,1,8.9,Female,VP,262000,52,Remote
+e2,Engineering,4.2,0,8.5,Male,VP,299000,48,Onsite
+e3,Sales,3.8,0,6.7,Female,Director,182000,18,Hybrid
+e4,Sales,3.6,1,6.1,Male,Director,188000,12,Onsite
+e5,Customer Support,4.1,1,7.0,Female,Manager,97000,10,Remote
+e6,Customer Support,3.2,0,5.8,Male,Manager,99000,8,Onsite
+e7,Customer Support,4.3,1,8.7,Female,Manager,101000,50,Remote
+e8,Customer Support,3.5,1,4.9,Male,Manager,98000,14,Remote
+e9,HR,4.0,0,8.2,Female,Director,176000,46,Onsite
+e10,HR,3.7,1,6.4,Male,Director,185000,22,Hybrid
+e11,Finance,3.8,0,7.1,Female,Director,179000,12,Onsite
+e12,Finance,4.1,0,8.0,Male,Director,186000,55,Remote
+e13,Engineering,4.5,1,9.1,Female,VP,268000,60,Remote
+e14,Sales,3.4,0,5.7,Male,Director,181000,9,Onsite
+e15,Customer Support,3.3,1,4.8,Female,Manager,96000,11,Remote
+e16,Product,4.2,0,8.6,Female,Director,184000,47,Hybrid
+e17,Product,4.1,0,8.4,Male,Director,187000,49,Onsite
+e18,Customer Support,3.1,1,5.0,Male,Manager,100000,13,Remote
+e19,Marketing,3.9,0,6.3,Female,Manager,108000,16,Hybrid
+e20,Marketing,3.8,1,5.9,Male,Manager,109000,14,Onsite

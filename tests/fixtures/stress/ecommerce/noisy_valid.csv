@@ -1,0 +1,21 @@
+purchase_date,total_amount,product_category,traffic_source,payment_type,device_type,discount_percent,is_returned,customer
+2024-01-05,370,Electronics,Direct,BNPL,Desktop,0,0,c1
+2024-01-12,335,Clothing,Organic,PayPal,Mobile,10,1,c2
+2024-01-19,332,Clothing,Organic,PayPal,Mobile,25,1,c2
+2024-02-02,368,Home & Kitchen,Referral,Credit Card,Desktop,0,0,c3
+2024-02-09,375,Electronics,Direct,BNPL,Desktop,0,0,c1
+2024-02-16,360,Clothing,Paid Search,Credit Card,Mobile,10,1,c4
+2024-03-01,355,Beauty,Referral,Apple Pay,Tablet,0,0,c5
+2024-03-08,340,Books,Organic,Debit Card,Desktop,0,0,c6
+2024-03-15,372,Electronics,Direct,BNPL,Desktop,0,0,c1
+2024-03-22,378,Clothing,Referral,PayPal,Mobile,10,1,c2
+2024-03-29,365,Electronics,Direct,Debit Card,Desktop,0,0,c7
+2024-04-05,358,Sports,Email,Apple Pay,Tablet,10,0,c8
+2024-04-12,349,Home & Kitchen,Social,Credit Card,Mobile,0,0,c9
+2024-04-19,320,Clothing,Organic,PayPal,Mobile,25,1,c4
+2024-04-26,330,Clothing,Paid Search,Credit Card,Mobile,25,1,c4
+2024-05-03,300,Books,Organic,Debit Card,Desktop,0,0,c10
+2024-05-10,295,Beauty,Referral,Apple Pay,Tablet,10,0,c5
+2024-05-17,344,Clothing,Direct,BNPL,Desktop,0,0,c1
+2024-05-24,390,Electronics,Social,Credit Card,Mobile,0,0,c11
+2024-05-31,410,Home & Kitchen,Email,BNPL,Desktop,0,0,c12

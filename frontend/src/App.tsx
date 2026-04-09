@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Download, Eye } from "lucide-react";
-import { analyzeCsv, buildDashboard, regenerateReview } from "./api/client";
+import { ArrowLeft, Download, Eye, House } from "lucide-react";
+import { analyzeCsv, buildDashboard, getTemplates, regenerateReview } from "./api/client";
 import { DashboardBuilder } from "./components/DashboardBuilder";
 import { DashboardCanvas } from "./components/dashboard/DashboardCanvas";
 import { InsightReview } from "./components/InsightReview";
@@ -8,7 +8,7 @@ import { LoadingOverlay } from "./components/LoadingOverlay";
 import { TemplateConfirmation } from "./components/TemplateConfirmation";
 import { UploadHero } from "./components/UploadHero";
 import { downloadHtmlFile, rebuildDashboardBlueprint } from "./lib/dashboard";
-import type { AnalyzeResponse, DashboardBlueprint, DashboardResponse } from "./types";
+import type { AnalyzeResponse, DashboardBlueprint, DashboardResponse, TemplateOption } from "./types";
 
 type ScreenStep = "landing" | "loading" | "template" | "review" | "builder" | "preview";
 
@@ -18,6 +18,57 @@ const LOADING_STAGES = [
   "Cleaning inconsistent values...",
   "Matching the best template...",
   "Weaving the first insight set...",
+];
+
+const LANDING_TEMPLATE_FALLBACK: TemplateOption[] = [
+  {
+    kind: "financial_timeseries",
+    label: "Financial Time Series",
+    description: "OHLCV-style stock or market data with long-horizon price behavior.",
+    implemented: true,
+  },
+  {
+    kind: "ecommerce_orders",
+    label: "E-commerce / Retail",
+    description: "Order-level revenue, discount, return, channel, and customer behavior data.",
+    implemented: true,
+  },
+  {
+    kind: "healthcare_medical",
+    label: "Healthcare / Medical",
+    description: "Patient, treatment, cost, and outcome datasets.",
+    implemented: true,
+  },
+  {
+    kind: "marketing_campaign",
+    label: "Marketing / Campaign",
+    description: "Impressions, clicks, conversions, and ROAS-style data.",
+    implemented: false,
+  },
+  {
+    kind: "hr_workforce",
+    label: "HR / Workforce",
+    description: "Employee, department, tenure, salary, and attrition data.",
+    implemented: true,
+  },
+  {
+    kind: "survey_sentiment",
+    label: "Survey / Sentiment",
+    description: "Response, rating, sentiment, and open-text feedback datasets.",
+    implemented: false,
+  },
+  {
+    kind: "web_app_analytics",
+    label: "Web / App Analytics",
+    description: "Session, page, event, and device funnel data.",
+    implemented: false,
+  },
+  {
+    kind: "generic",
+    label: "Generic CSV",
+    description: "Fallback template when no specialized business template is ready.",
+    implemented: true,
+  },
 ];
 
 function App() {
@@ -31,6 +82,7 @@ function App() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  const [isApplyingPrompt, setIsApplyingPrompt] = useState(false);
   const [isBuildingDashboard, setIsBuildingDashboard] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [dashboardTitle, setDashboardTitle] = useState("");
@@ -39,6 +91,7 @@ function App() {
   const [metricCount, setMetricCount] = useState(4);
   const [showNotes, setShowNotes] = useState(true);
   const [isSyncingPreview, setIsSyncingPreview] = useState(false);
+  const [landingTemplateOptions, setLandingTemplateOptions] = useState<TemplateOption[]>(LANDING_TEMPLATE_FALLBACK);
 
   const businessContext = analysis?.business_context ?? null;
   const review = analysis?.review ?? { insights: [], focus_tags: [] };
@@ -50,6 +103,22 @@ function App() {
   );
 
   const maxMetricCount = Math.max(2, Math.min(6, Math.max(approvedInsightIds.length, 2)));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getTemplates()
+      .then((templates) => {
+        if (!cancelled && templates.length > 0) {
+          setLandingTemplateOptions(templates);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (step !== "loading") {
@@ -91,6 +160,28 @@ function App() {
       showNotes,
     });
   }, [dashboard, dashboardTitle, dashboardSubtitle, metricCount, sectionOrder, showNotes, maxMetricCount]);
+
+  function resetFlow() {
+    setStep("landing");
+    setSelectedFile(null);
+    setAnalysis(null);
+    setSelectedTemplateKind("generic");
+    setApprovals({});
+    setUserPrompt("");
+    setError(null);
+    setLoadingProgress(0);
+    setLoadingStageIndex(0);
+    setIsApplyingTemplate(false);
+    setIsApplyingPrompt(false);
+    setIsBuildingDashboard(false);
+    setDashboard(null);
+    setDashboardTitle("");
+    setDashboardSubtitle("");
+    setSectionOrder([]);
+    setMetricCount(4);
+    setShowNotes(true);
+    setIsSyncingPreview(false);
+  }
 
   async function runAnalyze(templateOverride?: string, nextStep: ScreenStep = "template") {
     if (!selectedFile) {
@@ -151,18 +242,17 @@ function App() {
     }
 
     try {
+      setIsApplyingPrompt(true);
       setError(null);
       const refreshedReview = await regenerateReview(businessContext.kind, businessContext.analysis, userPrompt);
       setAnalysis((current) => (current ? { ...current, review: refreshedReview } : current));
-      setApprovals((current) => {
-        const nextApprovals: Record<string, boolean> = {};
-        for (const insight of refreshedReview.insights) {
-          nextApprovals[insight.id] = current[insight.id] ?? Boolean(insight.recommended);
-        }
-        return nextApprovals;
-      });
+      setApprovals(
+        Object.fromEntries(refreshedReview.insights.map((insight) => [insight.id, Boolean(insight.recommended)]))
+      );
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Unable to refresh insight review.");
+    } finally {
+      setIsApplyingPrompt(false);
     }
   }
 
@@ -211,13 +301,22 @@ function App() {
   return (
     <div className="min-h-screen">
       {error ? (
-        <div className="fixed left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 shadow-sm">
+        <div
+          className="fixed left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 shadow-sm"
+          data-testid="app-error-banner"
+        >
           {error}
         </div>
       ) : null}
 
       {step === "landing" ? (
-        <UploadHero disabled={!selectedFile} file={selectedFile} onAnalyze={() => runAnalyze()} onFileSelected={setSelectedFile} />
+        <UploadHero
+          disabled={!selectedFile}
+          file={selectedFile}
+          onAnalyze={() => runAnalyze()}
+          onFileSelected={setSelectedFile}
+          templateOptions={landingTemplateOptions}
+        />
       ) : null}
 
       {step === "loading" ? <LoadingOverlay progress={loadingProgress} stage={LOADING_STAGES[loadingStageIndex]} /> : null}
@@ -242,11 +341,14 @@ function App() {
             focusTags={review.focus_tags}
             inputName={selectedFile?.name ?? "CSV file"}
             insights={review.insights}
+            isApplyingPrompt={isApplyingPrompt}
             isBuilding={isBuildingDashboard}
             onApplyPrompt={handleApplyPrompt}
             onApproveAll={() =>
               setApprovals(Object.fromEntries(review.insights.map((insight) => [insight.id, true])))
             }
+            onBackToLanding={resetFlow}
+            onBackToTemplate={() => setStep("template")}
             onBuildDashboard={() => handleBuildDashboard("builder")}
             onPromptChange={setUserPrompt}
             onRejectAll={() =>
@@ -268,11 +370,12 @@ function App() {
 
       {step === "builder" && draftBlueprint ? (
         <DashboardBuilder
-          availableSections={sectionLabelMapForKind(draftBlueprint.kind, templateOptions)}
+          availableSections={sectionLabelMapForKind(draftBlueprint.kind, templateOptions, businessContext?.analysis ?? null)}
           blueprint={draftBlueprint}
           isSyncingPreview={isSyncingPreview}
           maxMetricCount={maxMetricCount}
           metricCount={metricCount}
+          onBackToLanding={resetFlow}
           onBackToReview={() => setStep("review")}
           onMetricCountChange={setMetricCount}
           onOpenPreview={() => handleBuildDashboard("preview")}
@@ -288,7 +391,7 @@ function App() {
       ) : null}
 
       {step === "preview" && draftBlueprint && dashboard ? (
-        <div className="min-h-screen">
+        <div className="min-h-screen" data-testid="preview-screen">
           <header className="sticky top-0 z-20 border-b border-stone-200 bg-[#fafaf9]/90 backdrop-blur">
             <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between px-6 py-4">
               <div className="flex items-center gap-3">
@@ -302,11 +405,19 @@ function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <button className="secondary-button" onClick={resetFlow}>
+                  <House className="h-4 w-4" />
+                  Start over
+                </button>
                 <button className="secondary-button" onClick={() => setStep("builder")}>
                   <Eye className="h-4 w-4" />
                   Back to builder
                 </button>
-                <button className="primary-button" onClick={() => downloadHtmlFile(dashboard.download_name, dashboard.html)}>
+                <button
+                  className="primary-button"
+                  data-testid="download-html-button"
+                  onClick={() => downloadHtmlFile(dashboard.download_name, dashboard.html)}
+                >
                   <Download className="h-4 w-4" />
                   Download static HTML
                 </button>
@@ -328,8 +439,8 @@ function UnsupportedTemplateState({ onRestart }: { onRestart: () => void }) {
         <p className="section-heading">Template coming soon</p>
         <h2 className="editorial-heading mt-4 text-3xl font-bold">No specialized template is ready for this dataset yet</h2>
         <p className="mt-4 text-base leading-7 text-stone-600">
-          The new product UI is in place, but this release only supports financial time-series and e-commerce order
-          datasets with full native dashboard rendering.
+          The new product UI is in place, but this dataset does not match one of the specialized templates that Loom
+          can render natively yet.
         </p>
         <button className="primary-button mt-8" onClick={onRestart}>
           Start another upload
@@ -346,6 +457,12 @@ function defaultDashboardTitle(kind: string): string {
   if (kind === "ecommerce_orders") {
     return "E-commerce Hidden Insights";
   }
+  if (kind === "healthcare_medical") {
+    return "Healthcare Hidden Insights";
+  }
+  if (kind === "hr_workforce") {
+    return "HR Workforce Hidden Insights";
+  }
   return "Business Dashboard";
 }
 
@@ -354,26 +471,71 @@ function defaultSectionsForReview(insights: AnalyzeResponse["review"]["insights"
   return Array.from(new Set(["overview", ...sections]));
 }
 
-function sectionLabelMapForKind(kind: string, options: AnalyzeResponse["template_options"]): Record<string, string> {
+function sectionLabelMapForKind(
+  kind: string,
+  options: AnalyzeResponse["template_options"],
+  analysis: Record<string, unknown> | null = null
+): Record<string, string> {
   if (kind === "financial_timeseries") {
     return {
-      overview: "Narrative headline cards",
-      seasonality: "Weekday and month patterns",
-      volatility: "Volatility regime",
-      gaps: "Overnight gap behavior",
-      volume: "Extreme volume",
-      data_notes: "Approved insight notes",
+      overview: "KPI cards and key insights",
+      seasonality: "Charts: calendar patterns",
+      volatility: "Charts: volatility",
+      gaps: "Charts: overnight gaps",
+      volume: "Charts: trading volume",
+      data_notes: "Insight notes",
     };
   }
 
   if (kind === "ecommerce_orders") {
     return {
-      overview: "Narrative KPI cards",
-      revenue: "Revenue patterns",
-      returns: "Return behavior",
-      channels: "Channel and device quality",
-      discounts: "Discount efficiency",
-      notes: "Approved insight notes",
+      overview: "KPI cards and key insights",
+      revenue: "Charts: revenue",
+      returns: "Charts: returns",
+      channels: "Charts: channels and devices",
+      discounts: "Charts: discounts",
+      notes: "Insight notes",
+    };
+  }
+
+  if (kind === "healthcare_medical") {
+    const profile = typeof analysis?.profile === "string" ? analysis.profile : "outcomes";
+    if (profile === "admissions") {
+      return {
+        overview: "KPI cards and key insights",
+        utilization: "Charts: admissions and length of stay",
+        diagnoses: "Charts: condition patterns",
+        billing: "Charts: billing and payer mix",
+        notes: "Insight notes",
+      };
+    }
+    if (profile === "insurance_risk") {
+      return {
+        overview: "KPI cards and key insights",
+        risk_factors: "Charts: smoking and BMI risk",
+        demographics: "Charts: age, gender, and family mix",
+        pricing: "Charts: regional and pricing spread",
+        notes: "Insight notes",
+      };
+    }
+    return {
+      overview: "KPI cards and key insights",
+      adherence: "Charts: adherence and outcomes",
+      care_delivery: "Charts: telehealth and follow-up",
+      equity: "Charts: equity",
+      costs: "Charts: costs and support risk",
+      notes: "Insight notes",
+    };
+  }
+
+  if (kind === "hr_workforce") {
+    return {
+      overview: "KPI cards and key insights",
+      retention: "Charts: attrition and engagement",
+      compensation: "Charts: pay equity",
+      development: "Charts: training and development",
+      workforce_model: "Charts: remote risk and departments",
+      notes: "Insight notes",
     };
   }
 

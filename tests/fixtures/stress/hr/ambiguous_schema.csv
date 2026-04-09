@@ -1,0 +1,6 @@
+employee_id,department,performance_score,attrition,engagement_score,gender,level,salary,training_hours
+e1,Engineering,4.4,1,8.9,Female,VP,262000,52
+e2,Engineering,4.2,0,8.5,Male,VP,299000,48
+e3,Sales,3.8,0,6.7,Female,Director,182000,18
+e4,Sales,3.6,1,6.1,Male,Director,188000,12
+e5,Customer Support,4.1,1,7.0,Female,Manager,97000,10

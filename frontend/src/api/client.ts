@@ -1,9 +1,20 @@
-import type { AnalyzeResponse, DashboardResponse, ReviewBundle } from "../types";
+import type { AnalyzeResponse, DashboardResponse, ReviewBundle, TemplateOption } from "../types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 function apiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+
+export async function getTemplates(): Promise<TemplateOption[]> {
+  const response = await fetch(apiUrl("/api/templates"));
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const payload = await response.json();
+  return payload.templates ?? [];
 }
 
 export async function analyzeCsv(file: File, templateOverride?: string): Promise<AnalyzeResponse> {

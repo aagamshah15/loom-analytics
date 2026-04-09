@@ -1,0 +1,6 @@
+date,revenue,category,comment
+2024-01-01,100,Alpha,normal row
+2024-01-02,not-a-number,Beta,numeric drift
+2024-01-03,250,Gamma,another row
+2024-01-04,300,Alpha,mixed values
+2024-01-05,?,Delta,unknown token
