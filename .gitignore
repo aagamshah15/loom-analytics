@@ -6,6 +6,13 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
 
 build/
 dist/
@@ -14,6 +21,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 *.tsbuildinfo
 
 output/

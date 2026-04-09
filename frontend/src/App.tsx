@@ -221,18 +221,29 @@ function App() {
     }
   }
 
-  async function handleConfirmTemplate() {
+  async function handleApplyTemplateOverride() {
     if (!analysis) {
       return;
     }
 
     const currentKind = analysis.business_context?.kind ?? analysis.detected_template?.kind ?? "generic";
-    if (selectedTemplateKind !== currentKind) {
-      setIsApplyingTemplate(true);
-      await runAnalyze(selectedTemplateKind, "review");
-      setIsApplyingTemplate(false);
+    if (selectedTemplateKind === currentKind) {
+      setStep("review");
       return;
     }
+
+    setIsApplyingTemplate(true);
+    await runAnalyze(selectedTemplateKind, "review");
+    setIsApplyingTemplate(false);
+  }
+
+  function handleContinueWithDetectedTemplate() {
+    if (!analysis) {
+      return;
+    }
+
+    const currentKind = analysis.business_context?.kind ?? analysis.detected_template?.kind ?? "generic";
+    setSelectedTemplateKind(currentKind);
     setStep("review");
   }
 
@@ -325,8 +336,8 @@ function App() {
         <TemplateConfirmation
           detectedTemplate={analysis.detected_template}
           isApplying={isApplyingTemplate}
-          onApplyOverride={handleConfirmTemplate}
-          onContinue={handleConfirmTemplate}
+          onApplyOverride={handleApplyTemplateOverride}
+          onContinue={handleContinueWithDetectedTemplate}
           onSelectedKindChange={setSelectedTemplateKind}
           selectedKind={selectedTemplateKind}
           templateOptions={templateOptions}
