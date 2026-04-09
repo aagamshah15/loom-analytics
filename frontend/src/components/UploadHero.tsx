@@ -64,31 +64,27 @@ export function UploadHero({ onFileSelected, onAnalyze, file, templateOptions, d
       { id: "docs" as const, element: docsRef.current },
     ].filter((section): section is { id: LandingSection; element: HTMLElement } => Boolean(section.element));
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+    const updateActiveSection = () => {
+      const topOffset = 140;
+      let nextActive: LandingSection = "analyze";
 
-        if (visible) {
-          const match = sections.find((section) => section.element === visible.target);
-          if (match) {
-            setActiveSection(match.id);
-          }
+      for (const section of sections) {
+        const sectionTop = section.element.getBoundingClientRect().top;
+        if (sectionTop <= topOffset) {
+          nextActive = section.id;
         }
-      },
-      {
-        rootMargin: "-25% 0px -55% 0px",
-        threshold: [0.2, 0.45, 0.7],
       }
-    );
 
-    for (const section of sections) {
-      observer.observe(section.element);
-    }
+      setActiveSection(nextActive);
+    };
+
+    updateActiveSection();
+    window.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
 
     return () => {
-      observer.disconnect();
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
     };
   }, []);
 
@@ -96,6 +92,7 @@ export function UploadHero({ onFileSelected, onAnalyze, file, templateOptions, d
     const target =
       section === "analyze" ? analyzeRef.current : section === "templates" ? templatesRef.current : docsRef.current;
 
+    setActiveSection(section);
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
 
     if (section === "analyze") {
