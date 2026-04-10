@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { ArrowRight, BarChart3, BriefcaseBusiness, CheckCircle2, HeartPulse, ShoppingBag, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, BriefcaseBusiness, CheckCircle2, Globe, HeartPulse, MessageSquareQuote, ShoppingBag, Sparkles, TrendingUp } from "lucide-react";
 import type { BusinessContext, TemplateOption } from "../types";
 import { cn } from "../lib/cn";
 
@@ -17,7 +17,10 @@ const TEMPLATE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   financial_timeseries: TrendingUp,
   ecommerce_orders: ShoppingBag,
   healthcare_medical: HeartPulse,
+  marketing_campaign: Sparkles,
   hr_workforce: BriefcaseBusiness,
+  survey_sentiment: MessageSquareQuote,
+  web_app_analytics: Globe,
   generic: BarChart3,
 };
 

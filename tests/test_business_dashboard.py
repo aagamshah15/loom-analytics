@@ -39,6 +39,21 @@ from pipeline.business.healthcare_dashboard import (
     build_business_dashboard as build_healthcare_dashboard,
     build_healthcare_insight_candidates,
 )
+from pipeline.business.marketing_dashboard import (
+    analyze_marketing_context,
+    build_business_dashboard as build_marketing_dashboard,
+    build_marketing_insight_candidates,
+)
+from pipeline.business.survey_dashboard import (
+    analyze_survey_context,
+    build_business_dashboard as build_survey_dashboard,
+    build_survey_insight_candidates,
+)
+from pipeline.business.web_analytics_dashboard import (
+    analyze_web_analytics_context,
+    build_business_dashboard as build_web_analytics_dashboard,
+    build_web_analytics_insight_candidates,
+)
 from pipeline.business.hr_dashboard import (
     analyze_hr_context,
     build_business_dashboard as build_hr_business_dashboard,
@@ -534,6 +549,403 @@ class BusinessDashboardTests(unittest.TestCase):
         self.assertIn("blueprint", dashboard)
         self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
         self.assertEqual(dashboard["blueprint"]["layout_sections"][1]["id"], "risk_factors")
+
+    def test_build_marketing_dashboard_for_campaign_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "campaign_id": [f"c{i}" for i in range(1, 25)],
+                "channel": [
+                    "TV/Radio", "TV/Radio", "TV/Radio", "TV/Radio",
+                    "Display", "Display", "Display", "Display",
+                    "Email", "Email", "Email", "Email",
+                    "Paid Search", "Paid Search", "Paid Search", "Paid Search",
+                    "Connected TV", "Connected TV", "Connected TV", "Connected TV",
+                    "Mobile App", "Mobile App", "Social", "Social",
+                ],
+                "spend": [
+                    10_000_000, 9_000_000, 8_000_000, 7_000_000,
+                    11_000_000, 10_000_000, 10_000_000, 9_000_000,
+                    1_200_000, 1_100_000, 1_300_000, 1_400_000,
+                    8_000_000, 7_000_000, 8_000_000, 7_000_000,
+                    6_000_000, 5_000_000, 6_000_000, 5_000_000,
+                    4_500_000, 4_500_000, 4_000_000, 4_000_000,
+                ],
+                "revenue": [
+                    1_200_000, 900_000, 1_000_000, 800_000,
+                    1_500_000, 1_200_000, 1_300_000, 1_100_000,
+                    960_000, 850_000, 1_020_000, 1_090_000,
+                    1_080_000, 910_000, 1_000_000, 870_000,
+                    3_000_000, 2_500_000, 3_100_000, 2_400_000,
+                    1_150_000, 1_120_000, 1_000_000, 980_000,
+                ],
+                "experiment_group": [
+                    "Control", "Variant A", "Variant B", "Control",
+                    "Variant A", "Variant B", "Control", "Variant A",
+                    "Control", "Control", "Control", "Control",
+                    "Variant A", "Variant A", "Variant B", "Variant B",
+                    "Control", "Control", "Variant A", "Variant B",
+                    "Variant B", "Variant A", "Variant B", "Variant A",
+                ],
+                "device": [
+                    "Desktop", "Desktop", "Desktop", "Connected TV",
+                    "Desktop", "Mobile", "Mobile", "Desktop",
+                    "Desktop", "Desktop", "Connected TV", "Desktop",
+                    "Desktop", "Mobile", "Desktop", "Mobile",
+                    "Connected TV", "Connected TV", "Connected TV", "Connected TV",
+                    "Mobile", "Mobile", "Mobile", "Desktop",
+                ],
+                "bounce_rate": [
+                    0.44, 0.45, 0.43, 0.45,
+                    0.48, 0.51, 0.50, 0.47,
+                    0.31, 0.30, 0.44, 0.29,
+                    0.42, 0.50, 0.41, 0.53,
+                    0.45, 0.44, 0.46, 0.45,
+                    0.55, 0.53, 0.52, 0.40,
+                ],
+                "impressions": [
+                    8_000_000, 7_500_000, 7_000_000, 6_500_000,
+                    9_000_000, 8_500_000, 8_000_000, 7_500_000,
+                    900_000, 850_000, 800_000, 780_000,
+                    12_000_000, 11_000_000, 10_500_000, 10_000_000,
+                    4_500_000, 4_000_000, 3_800_000, 3_700_000,
+                    14_000_000, 13_500_000, 5_000_000, 4_800_000,
+                ],
+                "age_group": [
+                    "18-24", "25-34", "35-44", "45-54",
+                    "18-24", "25-34", "35-44", "45-54",
+                    "18-24", "25-34", "35-44", "45-54",
+                    "18-24", "25-34", "35-44", "45-54",
+                    "18-24", "25-34", "35-44", "45-54",
+                    "18-24", "25-34", "35-44", "45-54",
+                ],
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "marketing_campaign")
+
+        analysis = analyze_marketing_context(context)
+        self.assertIsNotNone(analysis)
+        insights = build_marketing_insight_candidates(analysis, "focus on channels and mobile")
+        self.assertIn("channels", insights["focus_tags"])
+        self.assertIn("device", insights["focus_tags"])
+        self.assertGreater(len(insights["insights"]), 0)
+
+        insight_ids = {item["id"] for item in insights["insights"]}
+        self.assertIn("channel_budget_black_holes", insight_ids)
+        self.assertIn("mobile_conversion_leak", insight_ids)
+
+        approved_ids = [item["id"] for item in insights["insights"][:4]]
+        dashboard = build_marketing_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            user_prompt="focus on channels and mobile",
+            settings={
+                "title": "Marketing Efficiency Dashboard",
+                "subtitle": "Approved campaign insights",
+                "included_sections": ["overview", "channels", "testing", "audience", "funnel", "notes"],
+                "metric_count": 4,
+                "show_notes": True,
+            },
+        )
+
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["kind"], "marketing_campaign")
+        self.assertIn("Marketing Efficiency Dashboard", dashboard["html"])
+        self.assertIn("blueprint", dashboard)
+        self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
+
+        routed_dashboard = build_dashboard(
+            kind="marketing_campaign",
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            settings={"included_sections": ["overview", "channels", "funnel"]},
+        )
+        self.assertIsNotNone(routed_dashboard)
+        self.assertEqual(routed_dashboard["kind"], "marketing_campaign")
+
+    def test_marketing_crm_profile_detects(self) -> None:
+        df = pd.DataFrame(
+            {
+                "Income": [20000, 22000, 25000, 28000, 30000, 32000, 35000, 38000, 42000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000, 90000, 95000],
+                "Kidhome": [1, 1, 0, 1, 2, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                "Teenhome": [1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                "Recency": [70, 66, 61, 58, 55, 49, 45, 39, 35, 31, 28, 24, 21, 17, 14, 10, 8, 6, 4, 2],
+                "MntTotal": [40, 55, 65, 80, 95, 120, 150, 210, 260, 330, 420, 510, 620, 760, 890, 1020, 1180, 1350, 1600, 1850],
+                "NumDealsPurchases": [2, 1, 3, 2, 4, 2, 5, 3, 1, 2, 4, 5, 1, 2, 5, 6, 1, 5, 6, 7],
+                "NumWebPurchases": [1, 1, 2, 1, 2, 2, 3, 3, 4, 3, 4, 5, 4, 5, 6, 6, 5, 6, 7, 7],
+                "NumCatalogPurchases": [0, 0, 1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 4, 5, 6, 6],
+                "NumStorePurchases": [1, 1, 1, 2, 2, 2, 3, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7],
+                "NumWebVisitsMonth": [8, 8, 7, 7, 6, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1],
+                "AcceptedCmpOverall": [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4],
+                "Response": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1],
+            }
+        )
+        context = PipelineContext(clean_df=df)
+        analysis = analyze_marketing_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "crm")
+
+    def test_marketing_lead_generation_profile_detects(self) -> None:
+        df = pd.DataFrame(
+            {
+                "mql_id": [f"m{i}" for i in range(1, 25)],
+                "first_contact_date": pd.date_range("2018-01-01", periods=24, freq="7D"),
+                "landing_page_id": ["lp1", "lp1", "lp2", "lp2", "lp1", "lp3", "lp4", "lp1", "lp2", "lp3", "lp4", "lp5", "lp1", "lp2", "lp3", "lp4", "lp5", "lp6", "lp1", "lp2", "lp3", "lp4", "lp5", "lp6"],
+                "origin": ["organic_search", "paid_search", "social", "unknown", "organic_search", "social", "paid_search", "organic_search", "unknown", "social", "email", "referral", "organic_search", "paid_search", "social", "unknown", "email", "referral", "organic_search", "paid_search", "social", "unknown", "email", "referral"],
+            }
+        )
+        context = PipelineContext(clean_df=df)
+        analysis = analyze_marketing_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "lead_generation")
+
+    def test_marketing_closed_deals_profile_detects(self) -> None:
+        df = pd.DataFrame(
+            {
+                "mql_id": [f"m{i}" for i in range(1, 25)],
+                "won_date": pd.date_range("2018-01-01", periods=24, freq="10D"),
+                "business_segment": ["home_decor", "pet", "car_accessories", "home_decor", "pet", "construction_tools_house_garden"] * 4,
+                "lead_type": ["industry", "online_small", "online_big", "industry", "offline", "other"] * 4,
+                "lead_behaviour_profile": ["shark", "cat", "eagle", "shark", "wolf", "cat"] * 4,
+                "business_type": ["manufacturer", "reseller", "manufacturer", "manufacturer", "reseller", "other"] * 4,
+                "declared_monthly_revenue": [500000, 12000, 80000, 450000, 3000, 210000] * 4,
+            }
+        )
+        context = PipelineContext(clean_df=df)
+        analysis = analyze_marketing_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "closed_deals")
+
+    def test_build_marketing_dashboard_for_crm_profile(self) -> None:
+        df = pd.DataFrame(
+            {
+                "Income": [20000, 22000, 25000, 28000, 30000, 32000, 35000, 38000, 42000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000, 90000, 95000],
+                "Kidhome": [1, 1, 0, 1, 2, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                "Teenhome": [1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                "Recency": [70, 66, 61, 58, 55, 49, 45, 39, 35, 31, 28, 24, 21, 17, 14, 10, 8, 6, 4, 2],
+                "MntTotal": [40, 55, 65, 80, 95, 120, 150, 210, 260, 330, 420, 510, 620, 760, 890, 1020, 1180, 1350, 1600, 1850],
+                "NumDealsPurchases": [2, 1, 3, 2, 4, 2, 5, 3, 1, 2, 4, 5, 1, 2, 5, 6, 1, 5, 6, 7],
+                "NumWebPurchases": [1, 1, 2, 1, 2, 2, 3, 3, 4, 3, 4, 5, 4, 5, 6, 6, 5, 6, 7, 7],
+                "NumCatalogPurchases": [0, 0, 1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 4, 5, 6, 6],
+                "NumStorePurchases": [1, 1, 1, 2, 2, 2, 3, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7],
+                "NumWebVisitsMonth": [8, 8, 7, 7, 6, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1],
+                "AcceptedCmpOverall": [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4],
+                "Response": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1],
+            }
+        )
+        analysis = analyze_marketing_context(PipelineContext(clean_df=df))
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "crm")
+
+        dashboard = build_marketing_dashboard(
+            analysis=analysis,
+            approved_insight_ids=None,
+            settings={"included_sections": ["overview", "offers", "customers", "segments", "retention", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["kind"], "marketing_campaign")
+        self.assertEqual(dashboard["blueprint"]["dataset"]["customer_count"], 20)
+        self.assertIn("offers", [section["id"] for section in dashboard["blueprint"]["layout_sections"]])
+
+    def test_build_marketing_dashboard_for_lead_generation_profile(self) -> None:
+        df = pd.DataFrame(
+            {
+                "mql_id": [f"m{i}" for i in range(1, 25)],
+                "first_contact_date": pd.date_range("2018-01-01", periods=24, freq="7D"),
+                "landing_page_id": ["lp1", "lp1", "lp2", "lp2", "lp1", "lp3", "lp4", "lp1", "lp2", "lp3", "lp4", "lp5", "lp1", "lp2", "lp3", "lp4", "lp5", "lp6", "lp1", "lp2", "lp3", "lp4", "lp5", "lp6"],
+                "origin": ["organic_search", "paid_search", "social", "unknown", "organic_search", "social", "paid_search", "organic_search", "unknown", "social", "email", "referral", "organic_search", "paid_search", "social", "unknown", "email", "referral", "organic_search", "paid_search", "social", "unknown", "email", "referral"],
+            }
+        )
+        analysis = analyze_marketing_context(PipelineContext(clean_df=df))
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "lead_generation")
+
+        dashboard = build_marketing_dashboard(
+            analysis=analysis,
+            approved_insight_ids=None,
+            settings={"included_sections": ["overview", "acquisition", "landing_pages", "sources", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["blueprint"]["dataset"]["lead_count"], 24)
+        self.assertIn("landing_pages", [section["id"] for section in dashboard["blueprint"]["layout_sections"]])
+
+    def test_build_marketing_dashboard_for_closed_deals_profile(self) -> None:
+        df = pd.DataFrame(
+            {
+                "mql_id": [f"m{i}" for i in range(1, 25)],
+                "won_date": pd.date_range("2018-01-01", periods=24, freq="10D"),
+                "business_segment": ["home_decor", "pet", "car_accessories", "home_decor", "pet", "construction_tools_house_garden"] * 4,
+                "lead_type": ["industry", "online_small", "online_big", "industry", "offline", "other"] * 4,
+                "lead_behaviour_profile": ["shark", "cat", "eagle", "shark", "wolf", "cat"] * 4,
+                "business_type": ["manufacturer", "reseller", "manufacturer", "manufacturer", "reseller", "other"] * 4,
+                "declared_monthly_revenue": [500000, 12000, 80000, 450000, 3000, 210000] * 4,
+            }
+        )
+        analysis = analyze_marketing_context(PipelineContext(clean_df=df))
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "closed_deals")
+
+        dashboard = build_marketing_dashboard(
+            analysis=analysis,
+            approved_insight_ids=None,
+            settings={"included_sections": ["overview", "segments", "revenue", "sales_motion", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["blueprint"]["dataset"]["deal_count"], 24)
+        self.assertIn("sales_motion", [section["id"] for section in dashboard["blueprint"]["layout_sections"]])
+
+    def test_build_survey_dashboard_for_sentiment_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "role": [
+                    "Executive", "Executive", "Executive", "Executive", "Executive",
+                    "End User", "End User", "End User", "End User", "End User",
+                    "End User", "End User", "End User", "End User", "End User",
+                    "Executive", "Executive", "End User", "End User", "End User",
+                ],
+                "tenure_months": [72, 65, 80, 58, 62, 1, 2, 2, 3, 4, 7, 8, 10, 14, 18, 84, 90, 3, 5, 6],
+                "nps": [9, 8, 9, 7, 8, 2, 3, 1, 4, 5, 6, 5, 6, 7, 8, 9, 8, 4, 5, 6],
+                "ces": [1.8, 2.0, 1.9, 2.5, 2.2, 4.8, 4.7, 4.9, 4.5, 4.0, 3.9, 3.8, 3.7, 3.1, 2.9, 1.7, 1.8, 4.2, 3.6, 3.4],
+                "would_recommend": [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+                "renewal_intent": [4.8, 4.5, 4.9, 4.1, 4.3, 1.4, 1.8, 1.2, 2.0, 2.2, 2.7, 2.9, 3.0, 3.5, 3.8, 4.9, 4.6, 1.9, 2.4, 2.7],
+                "reporting_score": [4.5, 4.2, 4.3, 4.0, 4.1, 2.1, 2.3, 1.9, 2.5, 2.7, 3.0, 3.1, 3.2, 3.4, 3.5, 4.4, 4.3, 2.4, 2.8, 3.0],
+                "reliability_score": [4.8, 4.6, 4.7, 4.5, 4.4, 4.0, 4.1, 4.2, 4.0, 4.1, 4.2, 4.1, 4.3, 4.4, 4.5, 4.9, 4.8, 4.0, 4.2, 4.3],
+                "complaint_theme": [
+                    "Missing features", "Missing features", "Reporting", "Reporting", "Pricing",
+                    "Missing features", "Missing features", "Reporting", "Reporting", "Support",
+                    "Missing features", "Usability", "Reporting", "Support", "Pricing",
+                    "Reporting", "Missing features", "Missing features", "Reporting", "Usability",
+                ],
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "survey_sentiment")
+
+        analysis = analyze_survey_context(context)
+        self.assertIsNotNone(analysis)
+        insight_bundle = build_survey_insight_candidates(analysis, "focus on onboarding and renewal risk")
+        self.assertIn("onboarding", insight_bundle["focus_tags"])
+        self.assertIn("renewal", insight_bundle["focus_tags"])
+        self.assertGreater(len(insight_bundle["insights"]), 0)
+
+        approved_ids = [item["id"] for item in insight_bundle["insights"][:4]]
+        dashboard = build_survey_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            user_prompt="focus on onboarding and renewal risk",
+            settings={
+                "title": "Survey Risk Dashboard",
+                "subtitle": "Approved survey narrative",
+                "included_sections": ["overview", "stakeholders", "onboarding", "effort", "product", "renewal", "notes"],
+                "metric_count": 4,
+                "show_notes": True,
+            },
+        )
+
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["kind"], "survey_sentiment")
+        self.assertIn("Survey Risk Dashboard", dashboard["html"])
+        self.assertIn("blueprint", dashboard)
+        self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
+
+        routed_dashboard = build_dashboard(
+            kind="survey_sentiment",
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            settings={"included_sections": ["overview", "renewal", "notes"]},
+        )
+        self.assertIsNotNone(routed_dashboard)
+        self.assertEqual(routed_dashboard["kind"], "survey_sentiment")
+
+    def test_build_web_analytics_dashboard_for_funnel_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "device": [
+                    "Mobile", "Mobile", "Desktop", "Desktop", "Tablet", "Tablet",
+                    "Mobile", "Desktop", "Mobile", "Desktop", "Mobile", "Desktop",
+                    "Mobile", "Desktop", "Mobile", "Desktop", "Mobile", "Desktop",
+                    "Mobile", "Desktop",
+                ],
+                "channel": [
+                    "Social", "Social", "Paid Search", "Paid Search", "Email", "Email",
+                    "Organic", "Organic", "Social", "Email", "Direct", "Direct",
+                    "Referral", "Referral", "Social", "Paid Search", "Organic", "Email",
+                    "Direct", "Paid Search",
+                ],
+                "page": [
+                    "Home", "Blog", "Pricing", "Home", "Dashboard", "Home",
+                    "Blog", "Features", "Home", "Blog", "Home", "Pricing",
+                    "Home", "Dashboard", "Blog", "Home", "Pricing", "Features",
+                    "Home", "Blog",
+                ],
+                "sessions": [520, 410, 300, 360, 180, 170, 240, 210, 500, 150, 230, 260, 190, 130, 470, 320, 200, 160, 220, 280],
+                "conversions": [18, 9, 22, 21, 24, 20, 11, 16, 17, 26, 13, 18, 9, 15, 16, 20, 13, 22, 12, 19],
+                "bounce_rate": [61, 54, 34, 39, 28, 31, 40, 36, 58, 33, 42, 38, 44, 32, 60, 35, 37, 34, 43, 36],
+                "load_time": [3.6, 3.4, 2.0, 1.9, 2.4, 2.2, 3.0, 2.1, 3.5, 2.0, 3.1, 2.0, 3.0, 2.3, 3.7, 2.0, 3.1, 2.1, 3.2, 2.0],
+                "campaign": [
+                    "Social Prospecting", "Social Prospecting", "Brand Search", "Brand Search", "Onboarding Email", "Onboarding Email",
+                    "Lifecycle Nurture", "Lifecycle Nurture", "Social Prospecting", "Onboarding Email", "Homepage CTA", "Homepage CTA",
+                    "Partner Launch", "Partner Launch", "Social Prospecting", "Brand Search", "Lifecycle Nurture", "Onboarding Email",
+                    "Homepage CTA", "Brand Search",
+                ],
+                "scroll_depth": [32, 37, 58, 52, 69, 64, 48, 55, 34, 72, 46, 57, 43, 68, 33, 56, 49, 70, 45, 53],
+                "avg_time_on_page": [120, 305, 150, 98, 340, 110, 290, 180, 102, 145, 85, 132, 118, 310, 300, 115, 165, 175, 92, 285],
+                "visitor_type": [
+                    "New", "New", "Returning", "New", "Returning", "New",
+                    "Returning", "Returning", "New", "Returning", "New", "Returning",
+                    "New", "Returning", "New", "Returning", "Returning", "Returning",
+                    "New", "Returning",
+                ],
+                "exit_count": [160, 95, 54, 120, 20, 48, 60, 39, 155, 31, 70, 63, 58, 17, 148, 51, 40, 24, 65, 73],
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "web_app_analytics")
+
+        analysis = analyze_web_analytics_context(context)
+        self.assertIsNotNone(analysis)
+        insight_bundle = build_web_analytics_insight_candidates(analysis, "focus on mobile and channels")
+        self.assertIn("mobile", insight_bundle["focus_tags"])
+        self.assertIn("channels", insight_bundle["focus_tags"])
+        self.assertGreater(len(insight_bundle["insights"]), 0)
+
+        approved_ids = [item["id"] for item in insight_bundle["insights"][:4]]
+        dashboard = build_web_analytics_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            user_prompt="focus on mobile and channels",
+            settings={
+                "title": "Web Funnel Dashboard",
+                "subtitle": "Approved web analytics narrative",
+                "included_sections": ["overview", "devices", "channels", "campaigns", "content", "retention", "notes"],
+                "metric_count": 4,
+                "show_notes": True,
+            },
+        )
+
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["kind"], "web_app_analytics")
+        self.assertIn("Web Funnel Dashboard", dashboard["html"])
+        self.assertIn("blueprint", dashboard)
+        self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
+
+        routed_dashboard = build_dashboard(
+            kind="web_app_analytics",
+            analysis=analysis,
+            approved_insight_ids=approved_ids,
+            settings={"included_sections": ["overview", "devices", "channels", "content"]},
+        )
+        self.assertIsNotNone(routed_dashboard)
+        self.assertEqual(routed_dashboard["kind"], "web_app_analytics")
 
     def test_build_hr_dashboard_for_workforce_data(self) -> None:
         df = pd.DataFrame(
