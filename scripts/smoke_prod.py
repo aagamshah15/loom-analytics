@@ -37,8 +37,8 @@ SECTION_MAP = {
     "healthcare_medical": ["overview", "adherence", "care_delivery", "equity", "costs", "notes"],
     "marketing_campaign": ["overview", "allocation", "experiments", "audience", "digital_experience", "notes"],
     "hr_workforce": ["overview", "retention", "compensation", "development", "workforce_model", "notes"],
-    "survey_sentiment": ["overview", "stakeholder_gap", "onboarding", "effort", "feature_pain", "notes"],
-    "web_app_analytics": ["overview", "device_performance", "channels", "campaigns", "content_funnel", "notes"],
+    "survey_sentiment": ["overview", "stakeholders", "onboarding", "effort", "product", "renewal", "notes"],
+    "web_app_analytics": ["overview", "devices", "channels", "campaigns", "content", "retention", "notes"],
 }
 
 

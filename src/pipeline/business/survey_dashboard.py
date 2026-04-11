@@ -895,13 +895,44 @@ def _analyze_text_sentiment_context(df: pd.DataFrame) -> Optional[dict[str, Any]
 
 def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     summary = analysis["summary"]
+    signals = analysis["signals"]
     focus_tags = extract_focus_tags(user_prompt)
     polarization = summary["positive_rate"] + summary["negative_rate"]
     most_negative_source = str(summary.get("most_negative_source") or "Source")
     most_negative_source_rate = float(summary.get("most_negative_source_rate") or 0.0)
     highest_time_segment = str(summary.get("highest_time_segment") or "Time segment")
     highest_time_negative_rate = float(summary.get("highest_time_negative_rate") or 0.0)
+    source_count = len(signals.get("source_negative_rate", {}).get("labels", []))
     insights = [
+        {
+            "id": "sentiment_baseline",
+            "title": "The sentiment mix sets the first decision layer",
+            "category": "language",
+            "severity": "medium",
+            "summary": f"The response stream is {summary['positive_rate']:.1f}% positive, {summary['neutral_rate']:.1f}% neutral, and {summary['negative_rate']:.1f}% negative.",
+            "detail": "Before slicing by audience or source, the overall tone tells whether this dataset is a growth narrative, a risk narrative, or a balanced monitoring feed.",
+            "metric_label": "Net sentiment index",
+            "metric_value": f"{summary['overall_sentiment_index']:+.1f}",
+            "metric_sub": "positive minus negative balance",
+            "tags": ["language"],
+            "section": "language",
+            "priority": 93,
+        },
+        {
+            "id": "source_mix_matters",
+            "title": "Sentiment varies by source, so the average is hiding context",
+            "category": "sources",
+            "severity": "medium",
+            "summary": f"The dataset has {source_count} source/entity groups with different negative-response rates.",
+            "detail": "That makes source-level triage more useful than acting on one blended sentiment average, especially when the same message behaves differently across platforms or brands.",
+            "metric_label": "Source groups",
+            "metric_value": f"{source_count}",
+            "metric_sub": "groups with sentiment coverage",
+            "tags": ["sources"],
+            "section": "sources",
+            "priority": 91,
+            "condition": source_count > 1,
+        },
         {
             "id": "sentiment_skews_negative",
             "title": "Negative sentiment is outweighing the positive conversation",

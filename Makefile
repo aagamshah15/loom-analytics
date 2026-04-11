@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help dev api frontend health test test-templates test-ui test-stress smoke-prod
+.PHONY: help dev api frontend health test test-templates test-ui test-stress smoke-prod triage-csvs
 
 help:
 	@echo "Loom developer commands"
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-ui   Run Playwright browser tests"
 	@echo "  make test-stress Run backend, browser, and hosted smoke checks"
 	@echo "  make smoke-prod Run hosted Netlify + Render smoke checks"
+	@echo "  make triage-csvs ROOT=/path Run detect + build triage over CSV files"
 
 dev:
 	@./scripts/dev.sh
@@ -43,3 +44,6 @@ test-stress:
 
 smoke-prod:
 	@python3 scripts/smoke_prod.py
+
+triage-csvs:
+	@python3 scripts/triage_csvs.py $(ROOT)
