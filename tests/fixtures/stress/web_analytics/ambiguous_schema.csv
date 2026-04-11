@@ -1,0 +1,5 @@
+channel,device,spend,revenue,bounce_rate,age_group
+Social,Mobile,12000,3400,0.61,18-24
+Paid Search,Desktop,16000,8200,0.34,25-34
+Email,Desktop,3000,5400,0.28,35-44
+Display,Mobile,14000,2100,0.57,45-54

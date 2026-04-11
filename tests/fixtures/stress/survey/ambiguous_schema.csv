@@ -1,0 +1,6 @@
+employee_id,department,engagement_score,manager_rating,comment
+e1,Support,6.2,3.4,busy team
+e2,Sales,5.8,3.7,okay
+e3,Engineering,7.1,4.1,positive
+e4,Support,4.9,3.1,rough onboarding
+e5,Marketing,6.0,3.6,neutral

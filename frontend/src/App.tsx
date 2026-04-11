@@ -600,6 +600,34 @@ function sectionLabelMapForKind(
   }
 
   if (kind === "survey_sentiment") {
+    const profile = typeof analysis?.profile === "string" ? analysis.profile : "b2b_nps";
+    if (profile === "text_sentiment") {
+      return {
+        overview: "KPI cards and key insights",
+        sources: "Charts: sentiment by source",
+        language: "Charts: sentiment distribution and text depth",
+        momentum: "Charts: time and cadence",
+        notes: "Insight notes",
+      };
+    }
+    if (profile === "satisfaction") {
+      return {
+        overview: "KPI cards and key insights",
+        experience: "Charts: experience and feature ratings",
+        channels: "Charts: promo and visit behavior",
+        loyalty: "Charts: loyalty and return intent",
+        notes: "Insight notes",
+      };
+    }
+    if (profile === "wellbeing") {
+      return {
+        overview: "KPI cards and key insights",
+        barriers: "Charts: barriers and adoption friction",
+        wellbeing: "Charts: wellbeing and discomfort signals",
+        demographics: "Charts: age and audience mix",
+        notes: "Insight notes",
+      };
+    }
     return {
       overview: "KPI cards and key insights",
       stakeholders: "Charts: stakeholder sentiment gap",

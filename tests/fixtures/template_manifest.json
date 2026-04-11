@@ -1,0 +1,255 @@
+{
+  "templates": [
+    {
+      "kind": "financial_timeseries",
+      "fixtures": [
+        {
+          "path": "stress/financial/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "ohlcv",
+          "source_type": "derived",
+          "provenance": "Derived from public OHLCV-style market datasets and reduced for deterministic testing.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "financial_timeseries",
+          "expected_profile": null,
+          "intended_behaviors": ["long-term growth", "volume and seasonality coverage"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/financial/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "ohlcv_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy financial market sample with the same behavioral signals as the canonical OHLCV fixture.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "financial_timeseries",
+          "expected_profile": null,
+          "intended_behaviors": ["alias handling", "noisy financial detection"],
+          "known_quirks": []
+        }
+      ]
+    },
+    {
+      "kind": "ecommerce_orders",
+      "fixtures": [
+        {
+          "path": "stress/ecommerce/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "order_level",
+          "source_type": "derived",
+          "provenance": "Derived from public order-level commerce datasets and trimmed to a deterministic retail fixture.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "ecommerce_orders",
+          "expected_profile": null,
+          "intended_behaviors": ["discount vs return patterns", "channel and payment segmentation"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/ecommerce/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "order_level_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy commerce fixture preserving the same retail story with noisier columns.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "ecommerce_orders",
+          "expected_profile": null,
+          "intended_behaviors": ["alias handling", "noisy retail detection"],
+          "known_quirks": []
+        }
+      ]
+    },
+    {
+      "kind": "healthcare_medical",
+      "fixtures": [
+        {
+          "path": "stress/healthcare/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "outcomes",
+          "source_type": "derived",
+          "provenance": "Derived patient-outcome fixture preserving adherence, readmission, and care-delivery signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "healthcare_medical",
+          "expected_profile": "outcomes",
+          "intended_behaviors": ["adherence signal", "telehealth signal", "equity risk"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/healthcare/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "outcomes_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy healthcare outcomes fixture with deterministic care-quality signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "healthcare_medical",
+          "expected_profile": "outcomes",
+          "intended_behaviors": ["alias handling", "noisy healthcare detection"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/healthcare/admissions_canon.csv",
+          "fixture_class": "schema_variant",
+          "schema_family": "admissions",
+          "source_type": "derived",
+          "provenance": "Reduced admissions-style hospital dataset preserving admission, billing, and length-of-stay structure.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "healthcare_medical",
+          "expected_profile": "admissions",
+          "intended_behaviors": ["admissions profile detection", "billing and admission-type analysis"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/healthcare/insurance_risk_canon.csv",
+          "fixture_class": "schema_variant",
+          "schema_family": "insurance_risk",
+          "source_type": "derived",
+          "provenance": "Reduced insurance-risk healthcare fixture preserving smoker, BMI, regional, and charge structure.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "healthcare_medical",
+          "expected_profile": "insurance_risk",
+          "intended_behaviors": ["insurance profile detection", "cost and risk segmentation"],
+          "known_quirks": []
+        }
+      ]
+    },
+    {
+      "kind": "hr_workforce",
+      "fixtures": [
+        {
+          "path": "stress/hr/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "workforce",
+          "source_type": "derived",
+          "provenance": "Derived workforce fixture with attrition, pay-equity, and work-mode signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "hr_workforce",
+          "expected_profile": null,
+          "intended_behaviors": ["attrition hotspots", "pay equity", "remote risk"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/hr/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "workforce_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy workforce fixture preserving the same retention and compensation story.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "hr_workforce",
+          "expected_profile": null,
+          "intended_behaviors": ["alias handling", "noisy HR detection"],
+          "known_quirks": []
+        }
+      ]
+    },
+    {
+      "kind": "marketing_campaign",
+      "fixtures": [
+        {
+          "path": "stress/marketing/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "crm",
+          "source_type": "derived",
+          "provenance": "Derived from public CRM marketing response datasets and reduced for deterministic testing.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "marketing_campaign",
+          "expected_profile": "crm",
+          "intended_behaviors": ["prior-win response lift", "value-tier signal", "visit-intent mismatch"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/marketing/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "attribution_semicolon",
+          "source_type": "derived",
+          "provenance": "Derived attribution-style marketing fixture using semicolon-delimited aliases.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "marketing_campaign",
+          "expected_profile": "attribution",
+          "intended_behaviors": ["channel budget black holes", "email outperformance", "mobile leakage"],
+          "known_quirks": ["semicolon delimiter"]
+        },
+        {
+          "path": "stress/marketing/lead_generation_canon.csv",
+          "fixture_class": "schema_variant",
+          "schema_family": "lead_generation",
+          "source_type": "derived",
+          "provenance": "Reduced lead-generation marketing fixture preserving landing-page and origin concentration patterns.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "marketing_campaign",
+          "expected_profile": "lead_generation",
+          "intended_behaviors": ["lead-generation profile detection", "origin concentration"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/marketing/closed_deals_canon.csv",
+          "fixture_class": "schema_variant",
+          "schema_family": "closed_deals",
+          "source_type": "derived",
+          "provenance": "Reduced closed-deals marketing fixture preserving lead quality and revenue concentration signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "marketing_campaign",
+          "expected_profile": "closed_deals",
+          "intended_behaviors": ["closed-deals profile detection", "lead-type revenue concentration"],
+          "known_quirks": []
+        }
+      ]
+    },
+    {
+      "kind": "survey_sentiment",
+      "fixtures": [
+        {
+          "path": "stress/survey/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "b2b_persona_nps",
+          "source_type": "derived",
+          "provenance": "Derived survey fixture with stakeholder, onboarding, and renewal-risk signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "survey_sentiment",
+          "expected_profile": null,
+          "intended_behaviors": ["buyer vs user gap", "onboarding issue", "renewal risk"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/survey/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "feature_feedback_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy survey fixture with persona, effort, and complaint-theme signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "survey_sentiment",
+          "expected_profile": null,
+          "intended_behaviors": ["alias handling", "effort correlation", "feature pain"],
+          "known_quirks": ["semicolon delimiter", "mixed yes/no binary"]
+        }
+      ]
+    },
+    {
+      "kind": "web_app_analytics",
+      "fixtures": [
+        {
+          "path": "stress/web_analytics/happy_path.csv",
+          "fixture_class": "happy_path",
+          "schema_family": "page_channel_device",
+          "source_type": "derived",
+          "provenance": "Derived web analytics fixture with device, channel, content, and visitor-type signals.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "web_app_analytics",
+          "expected_profile": null,
+          "intended_behaviors": ["mobile leakage", "social waste", "homepage exits"],
+          "known_quirks": []
+        },
+        {
+          "path": "stress/web_analytics/noisy_valid.csv",
+          "fixture_class": "noisy_valid",
+          "schema_family": "campaign_aliases",
+          "source_type": "derived",
+          "provenance": "Alias-heavy web analytics fixture with campaign and visitor segmentation preserved.",
+          "license_note": "Derived internal test fixture for development and challenge evaluation.",
+          "expected_kind": "web_app_analytics",
+          "expected_profile": null,
+          "intended_behaviors": ["alias handling", "campaign efficiency", "returning visitor gap"],
+          "known_quirks": ["semicolon delimiter"]
+        }
+      ]
+    }
+  ]
+}

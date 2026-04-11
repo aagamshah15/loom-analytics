@@ -1,0 +1,21 @@
+device,channel,page,sessions,conversions,bounce_rate,load_time,campaign,scroll_depth,avg_time_on_page,visitor_type,exit_count
+Mobile,Social,Home,520,18,61,3.6,Social Prospecting,32,120,New,160
+Mobile,Social,Blog,410,9,54,3.4,Social Prospecting,37,305,New,95
+Desktop,Paid Search,Pricing,300,22,34,2.0,Brand Search,58,150,Returning,54
+Desktop,Paid Search,Home,360,21,39,1.9,Brand Search,52,98,New,120
+Tablet,Email,Dashboard,180,24,28,2.4,Onboarding Email,69,340,Returning,20
+Tablet,Email,Home,170,20,31,2.2,Onboarding Email,64,110,New,48
+Mobile,Organic,Blog,240,11,40,3.0,Lifecycle Nurture,48,290,Returning,60
+Desktop,Organic,Features,210,16,36,2.1,Lifecycle Nurture,55,180,Returning,39
+Mobile,Social,Home,500,17,58,3.5,Social Prospecting,34,102,New,155
+Desktop,Email,Blog,150,26,33,2.0,Onboarding Email,72,145,Returning,31
+Mobile,Direct,Home,230,13,42,3.1,Homepage CTA,46,85,New,70
+Desktop,Direct,Pricing,260,18,38,2.0,Homepage CTA,57,132,Returning,63
+Mobile,Referral,Home,190,9,44,3.0,Partner Launch,43,118,New,58
+Desktop,Referral,Dashboard,130,15,32,2.3,Partner Launch,68,310,Returning,17
+Mobile,Social,Blog,470,16,60,3.7,Social Prospecting,33,300,New,148
+Desktop,Paid Search,Home,320,20,35,2.0,Brand Search,56,115,Returning,51
+Mobile,Organic,Pricing,200,13,37,3.1,Lifecycle Nurture,49,165,Returning,40
+Desktop,Email,Features,160,22,34,2.1,Onboarding Email,70,175,Returning,24
+Mobile,Direct,Home,220,12,43,3.2,Homepage CTA,45,92,New,65
+Desktop,Paid Search,Blog,280,19,36,2.0,Brand Search,53,285,Returning,73

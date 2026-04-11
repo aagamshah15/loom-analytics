@@ -25,14 +25,20 @@ FIXTURE_MAP = {
     "financial_timeseries": FIXTURES_ROOT / "financial" / "happy_path.csv",
     "ecommerce_orders": FIXTURES_ROOT / "ecommerce" / "happy_path.csv",
     "healthcare_medical": FIXTURES_ROOT / "healthcare" / "happy_path.csv",
+    "marketing_campaign": FIXTURES_ROOT / "marketing" / "happy_path.csv",
     "hr_workforce": FIXTURES_ROOT / "hr" / "happy_path.csv",
+    "survey_sentiment": FIXTURES_ROOT / "survey" / "happy_path.csv",
+    "web_app_analytics": FIXTURES_ROOT / "web_analytics" / "happy_path.csv",
 }
 
 SECTION_MAP = {
     "financial_timeseries": ["overview", "seasonality", "volatility", "gaps", "volume", "data_notes"],
     "ecommerce_orders": ["overview", "revenue", "returns", "channels", "discounts", "notes"],
     "healthcare_medical": ["overview", "adherence", "care_delivery", "equity", "costs", "notes"],
+    "marketing_campaign": ["overview", "allocation", "experiments", "audience", "digital_experience", "notes"],
     "hr_workforce": ["overview", "retention", "compensation", "development", "workforce_model", "notes"],
+    "survey_sentiment": ["overview", "stakeholder_gap", "onboarding", "effort", "feature_pain", "notes"],
+    "web_app_analytics": ["overview", "device_performance", "channels", "campaigns", "content_funnel", "notes"],
 }
 
 

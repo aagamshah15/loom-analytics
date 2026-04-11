@@ -11,19 +11,19 @@ from pipeline.common.contracts import PipelineContext
 
 
 REQUIRED_COLUMN_ALIASES = {
-    "employee_id": ["employee_id", "employee", "worker_id", "id"],
     "department": ["department", "team", "function"],
-    "performance_score": ["performance_score", "performance", "review_score"],
-    "attrition": ["attrition", "left_company", "is_attrited", "terminated"],
-    "engagement_score": ["engagement_score", "engagement", "engagement_index"],
-    "gender": ["gender", "sex"],
-    "level": ["level", "job_level", "seniority", "title"],
-    "salary": ["salary", "compensation", "base_salary", "annual_salary"],
-    "training_hours": ["training_hours", "learning_hours", "l_and_d_hours"],
-    "work_mode": ["work_mode", "location_type", "work_arrangement"],
+    "performance_score": ["performance_score", "performance", "review_score", "performancerating", "performance_rating", "last_evaluation"],
+    "attrition": ["attrition", "left", "left_company", "is_attrited", "terminated"],
+    "engagement_score": ["engagement_score", "engagement", "engagement_index", "jobsatisfaction", "job_satisfaction", "environmentsatisfaction", "environment_satisfaction", "satisfaction_level"],
+    "salary": ["salary", "compensation", "base_salary", "annual_salary", "monthlyincome", "monthly_income", "salaryslab", "salary_slab"],
 }
 
 OPTIONAL_COLUMN_ALIASES = {
+    "employee_id": ["employee_id", "employee", "worker_id", "id", "employeenumber", "employee_number", "empid", "emp_id"],
+    "gender": ["gender", "sex"],
+    "level": ["level", "job_level", "joblevel", "seniority", "title"],
+    "training_hours": ["training_hours", "learning_hours", "l_and_d_hours", "trainingtimeslastyear", "training_times_last_year"],
+    "work_mode": ["work_mode", "location_type", "work_arrangement", "location", "workplace_type"],
     "tenure_years": ["tenure_years", "tenure", "years_at_company"],
     "manager_rating": ["manager_rating", "leadership_rating"],
 }
@@ -88,18 +88,18 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
 
     working = pd.DataFrame(
         {
-            "employee_id": df[detected["required"]["employee_id"]].astype(str).str.strip(),
+            "employee_id": _employee_ids(df, detected),
             "department": df[detected["required"]["department"]].astype(str).str.strip(),
-            "performance_score": pd.to_numeric(df[detected["required"]["performance_score"]], errors="coerce"),
+            "performance_score": _normalize_score(df[detected["required"]["performance_score"]]),
             "attrition": _normalize_binary(df[detected["required"]["attrition"]]),
-            "engagement_score": pd.to_numeric(df[detected["required"]["engagement_score"]], errors="coerce"),
-            "gender": df[detected["required"]["gender"]].astype(str).str.strip(),
-            "level": df[detected["required"]["level"]].astype(str).str.strip(),
-            "salary": pd.to_numeric(df[detected["required"]["salary"]], errors="coerce"),
-            "training_hours": pd.to_numeric(df[detected["required"]["training_hours"]], errors="coerce"),
-            "work_mode": df[detected["required"]["work_mode"]].astype(str).str.strip(),
+            "engagement_score": _normalize_score(df[detected["required"]["engagement_score"]]),
+            "gender": _optional_text_series(df, detected, "gender", default="Unknown"),
+            "level": _optional_text_series(df, detected, "level", default="Unknown"),
+            "salary": _normalize_salary(df[detected["required"]["salary"]]),
+            "training_hours": _optional_numeric_series(df, detected, "training_hours"),
+            "work_mode": _optional_text_series(df, detected, "work_mode", default="Unknown"),
         }
-    ).dropna(subset=["employee_id", "performance_score", "engagement_score", "salary", "training_hours"])
+    ).dropna(subset=["employee_id", "performance_score", "engagement_score", "salary"])
 
     if len(working) < 20:
         return None
@@ -109,19 +109,22 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
     else:
         working["tenure_years"] = None
 
+    if working["training_hours"].isna().all():
+        working["training_hours"] = pd.Series([None] * len(working), index=working.index)
+    else:
+        working["training_hours"] = _normalize_training_measure(working["training_hours"])
+
     working["performance_group"] = working["performance_score"].apply(_performance_group)
     working["engagement_group"] = working["engagement_score"].apply(_engagement_group)
     working["training_group"] = working["training_hours"].apply(_training_group)
     working["work_mode_group"] = working["work_mode"].apply(_normalize_work_mode)
 
-    if working["work_mode_group"].eq("Unknown").all():
-        return None
-
     attrition_by_performance = _rate_table(working, "performance_group", order=["High performer", "Everyone else"])
     attrition_by_engagement = _rate_table(working, "engagement_group", order=["Very high engagement", "Mid engagement", "Low engagement"])
     engagement_by_work_mode = working.groupby("work_mode_group")["engagement_score"].mean().sort_values(ascending=False)
     attrition_by_work_mode = _rate_table(working, "work_mode_group")
-    engagement_by_training = working.groupby("training_group")["engagement_score"].mean().reindex(["Under 15 hours", "15-44 hours", "45+ hours"]).fillna(0.0)
+    training_frame = working[working["training_group"] != "Unknown"].copy()
+    engagement_by_training = training_frame.groupby("training_group")["engagement_score"].mean().reindex(["Under 15 hours", "15-44 hours", "45+ hours"]).fillna(0.0)
     attrition_by_department = _rate_table(working, "department")
     avg_salary_by_level_gender = (
         working.groupby(["level", "gender"])["salary"].mean().reset_index().sort_values(["level", "gender"])
@@ -246,7 +249,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "category": "pay_equity",
             "severity": "high",
             "summary": (
-                f"Female VPs average ${summary['female_vp_salary']:,.0f} versus ${summary['male_vp_salary']:,.0f} for male VPs."
+                f"Female VPs average ${float(summary['female_vp_salary'] or 0):,.0f} versus ${float(summary['male_vp_salary'] or 0):,.0f} for male VPs."
             ),
             "detail": "The gap widening at a senior level is the opposite of the story most organizations tell themselves, which makes this a board-level equity issue rather than a small comp footnote.",
             "metric_label": "VP pay gap",
@@ -272,6 +275,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "tags": ["training"],
             "section": "development",
             "priority": 92,
+            "condition": summary["high_training_engagement"] > 0 or summary["low_training_engagement"] > 0,
         },
         {
             "id": "remote_retention_risk",
@@ -279,7 +283,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "category": "remote",
             "severity": "medium",
             "summary": (
-                f"Remote attrition is {summary['remote_attrition']:.1f}% versus {summary['onsite_attrition']:.1f}% onsite, while engagement also runs lower."
+                f"Remote attrition is {float(summary['remote_attrition'] or 0):.1f}% versus {float(summary['onsite_attrition'] or 0):.1f}% onsite, while engagement also runs lower."
             ),
             "detail": "The gap is not catastrophic, but it is consistent enough to justify a focused remote-work retention intervention rather than being dismissed as noise.",
             "metric_label": "Remote attrition gap",
@@ -296,11 +300,11 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "category": "department",
             "severity": "high",
             "summary": (
-                f"Customer Support attrition runs at {summary['customer_support_attrition']:.1f}% versus a company average of {summary['overall_attrition_rate']:.1f}%."
+                f"Customer Support attrition runs at {float(summary['customer_support_attrition'] or 0):.1f}% versus a company average of {summary['overall_attrition_rate']:.1f}%."
             ),
             "detail": "That is not a normal staffing fluctuation. It points to a structural problem in role design, management load, or burnout conditions.",
             "metric_label": "Support attrition",
-            "metric_value": f"{summary['customer_support_attrition']:.1f}%",
+            "metric_value": f"{float(summary['customer_support_attrition'] or 0):.1f}%",
             "metric_sub": "vs company average",
             "tags": ["department", "retention"],
             "section": "workforce_model",
@@ -460,8 +464,76 @@ def _normalize_binary(series: pd.Series) -> pd.Series:
     return normalized.isin(positives).astype(float)
 
 
+def _normalize_score(series: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(series, errors="coerce")
+    max_value = numeric.dropna().max()
+    if pd.isna(max_value):
+        return numeric
+    if max_value <= 1.0:
+        return numeric * 10.0
+    if max_value <= 5.0:
+        return numeric * 2.5
+    return numeric
+
+
+def _normalize_salary(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    normalized = series.astype(str).str.strip().str.lower()
+    mapped = normalized.map(
+        {
+            "low": 45000.0,
+            "medium": 70000.0,
+            "high": 95000.0,
+            "upto 5k": 42000.0,
+            "5k-10k": 90000.0,
+            "10k-15k": 150000.0,
+            "15k+": 210000.0,
+        }
+    )
+    numeric = pd.to_numeric(series, errors="coerce")
+    return mapped.where(mapped.notna(), numeric)
+
+
+def _normalize_training_measure(series: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(series, errors="coerce")
+    max_value = numeric.dropna().max()
+    if pd.isna(max_value):
+        return numeric
+    if max_value <= 10:
+        return numeric * 10.0
+    return numeric
+
+
+def _employee_ids(df: pd.DataFrame, detected: dict[str, dict[str, str]]) -> pd.Series:
+    column = detected["optional"].get("employee_id")
+    if column is not None:
+        return df[column].astype(str).str.strip()
+    return pd.Series([f"employee_{index + 1}" for index in range(len(df))], index=df.index)
+
+
+def _optional_text_series(
+    df: pd.DataFrame,
+    detected: dict[str, dict[str, str]],
+    key: str,
+    *,
+    default: str,
+) -> pd.Series:
+    column = detected["optional"].get(key)
+    if column is None:
+        return pd.Series([default] * len(df), index=df.index)
+    return df[column].astype(str).str.strip()
+
+
+def _optional_numeric_series(df: pd.DataFrame, detected: dict[str, dict[str, str]], key: str) -> pd.Series:
+    column = detected["optional"].get(key)
+    if column is None:
+        return pd.Series([None] * len(df), index=df.index, dtype="float64")
+    return pd.to_numeric(df[column], errors="coerce")
+
+
 def _performance_group(value: float) -> str:
-    return "High performer" if float(value) >= 4.0 else "Everyone else"
+    return "High performer" if float(value) >= 8.0 else "Everyone else"
 
 
 def _engagement_group(value: float) -> str:
@@ -473,6 +545,8 @@ def _engagement_group(value: float) -> str:
 
 
 def _training_group(value: float) -> str:
+    if pd.isna(value):
+        return "Unknown"
     if float(value) >= 45:
         return "45+ hours"
     if float(value) >= 15:

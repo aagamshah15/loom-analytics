@@ -64,6 +64,66 @@ from pipeline.common.contracts import PipelineContext
 
 
 class BusinessDashboardTests(unittest.TestCase):
+    def test_hr_detector_supports_ibm_attrition_style_schema(self) -> None:
+        rows = []
+        for index in range(24):
+            rows.append(
+                {
+                    "EmployeeNumber": index + 1,
+                    "Age": 24 + (index % 18),
+                    "Attrition": "Yes" if index % 5 == 0 else "No",
+                    "Department": ["Sales", "Research & Development", "Human Resources"][index % 3],
+                    "Gender": "Female" if index % 2 == 0 else "Male",
+                    "JobLevel": 1 + (index % 4),
+                    "MonthlyIncome": 3200 + (index % 9) * 900,
+                    "PerformanceRating": 3 if index % 4 else 4,
+                    "JobSatisfaction": 1 + (index % 4),
+                    "TrainingTimesLastYear": index % 6,
+                    "YearsAtCompany": index % 10,
+                }
+            )
+
+        context = PipelineContext(clean_df=pd.DataFrame(rows))
+        detected = detect_business_context(context)
+
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "hr_workforce")
+
+        analysis = analyze_hr_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertGreater(len(build_hr_insight_candidates(analysis, "")["insights"]), 0)
+
+    def test_hr_detector_supports_simple_attrition_risk_schema(self) -> None:
+        rows = []
+        departments = ["sales", "support", "technical", "management", "hr"]
+        salaries = ["low", "medium", "high"]
+        for index in range(30):
+            rows.append(
+                {
+                    "satisfaction_level": 0.38 + (index % 5) * 0.11,
+                    "last_evaluation": 0.52 + (index % 4) * 0.1,
+                    "number_project": 2 + (index % 4),
+                    "average_montly_hours": 145 + (index % 5) * 22,
+                    "time_spend_company": 2 + (index % 6),
+                    "Work_accident": 1 if index % 9 == 0 else 0,
+                    "left": 1 if index % 4 == 0 else 0,
+                    "promotion_last_5years": 1 if index % 11 == 0 else 0,
+                    "Department": departments[index % len(departments)],
+                    "salary": salaries[index % len(salaries)],
+                }
+            )
+
+        context = PipelineContext(clean_df=pd.DataFrame(rows))
+        detected = detect_business_context(context)
+
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "hr_workforce")
+
+        analysis = analyze_hr_context(context)
+        self.assertIsNotNone(analysis)
+        insight_ids = {item["id"] for item in build_hr_insight_candidates(analysis, "")["insights"]}
+        self.assertTrue({"high_performers_leave_too", "engagement_does_not_save_attrition"} & insight_ids)
+
     def test_build_business_dashboard_for_stock_data(self) -> None:
         df = pd.DataFrame(
             {
@@ -862,6 +922,108 @@ class BusinessDashboardTests(unittest.TestCase):
         )
         self.assertIsNotNone(routed_dashboard)
         self.assertEqual(routed_dashboard["kind"], "survey_sentiment")
+
+    def test_build_survey_dashboard_for_text_sentiment_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "2401": ["2402", "2403", "2404", "2405"] * 6,
+                "Borderlands": ["Borderlands", "Facebook", "Twitter", "Twitter"] * 6,
+                "Positive": ["Negative", "Neutral", "Positive", "Negative"] * 6,
+                "im getting on borderlands and i will murder you all ,": [
+                    "servers are broken and support is useless",
+                    "patch notes are out and the update looks fine",
+                    "love the gameplay loop here",
+                    "matchmaking still feels awful tonight",
+                ]
+                * 6,
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "survey_sentiment")
+        self.assertEqual(detected["analysis"]["profile"], "text_sentiment")
+
+        analysis = analyze_survey_context(context)
+        self.assertIsNotNone(analysis)
+        insight_bundle = build_survey_insight_candidates(analysis, "focus on platforms and negative tone")
+        self.assertIn("sources", insight_bundle["focus_tags"])
+        self.assertIn("language", insight_bundle["focus_tags"])
+
+        dashboard = build_survey_dashboard(
+            analysis=analysis,
+            approved_insight_ids=[item["id"] for item in insight_bundle["insights"][:3]],
+            settings={"included_sections": ["overview", "sources", "language", "momentum", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertIn("Text Sentiment Narrative", dashboard["html"])
+
+    def test_build_survey_dashboard_for_customer_satisfaction_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "productRate": [4, 4, 5, 3, 4, 5] * 4,
+                "priceRate": [3, 2, 3, 2, 3, 2] * 4,
+                "promoRate": [5, 4, 5, 4, 5, 4] * 4,
+                "ambianceRate": [5, 4, 4, 5, 4, 5] * 4,
+                "wifiRate": [3, 4, 4, 3, 4, 3] * 4,
+                "serviceRate": [4, 5, 5, 4, 5, 4] * 4,
+                "chooseRate": [3, 2, 4, 3, 4, 3] * 4,
+                "promoMethodApp": [1, 1, 1, 0, 1, 0] * 4,
+                "promoMethodEmail": [0, 1, 1, 0, 1, 0] * 4,
+                "promoMethodSoc": [1, 0, 1, 1, 0, 1] * 4,
+                "visitNo": [3, 2, 4, 1, 3, 2] * 4,
+                "loyal": [1, 0, 1, 0, 1, 0] * 4,
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "survey_sentiment")
+        self.assertEqual(detected["analysis"]["profile"], "satisfaction")
+
+        analysis = analyze_survey_context(context)
+        self.assertIsNotNone(analysis)
+        dashboard = build_survey_dashboard(
+            analysis=analysis,
+            approved_insight_ids=None,
+            settings={"included_sections": ["overview", "experience", "channels", "loyalty", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertIn("Satisfaction Narrative", dashboard["html"])
+
+    def test_build_survey_dashboard_for_wellbeing_data(self) -> None:
+        df = pd.DataFrame(
+            {
+                "Perceived_Hearing_Meaning": ["Staying connected", "Enjoying music", "Staying alert", "Staying connected"] * 6,
+                "Hearing_FOMO": ["Sometimes", "Rarely", "Often", "Sometimes"] * 6,
+                "Hearing_Test_Barrier": ["Cost", "Never felt the need", "Cost", "Fear"] * 6,
+                "Missed_Important_Sounds": ["Yes, in family conversations", "No", "Yes, in public spaces", "Yes, in family conversations"] * 6,
+                "Left_Out_Due_To_Hearing": ["Yes, often", "Only in noisy places", "No", "Yes, often"] * 6,
+                "Belief_Early_Hearing_Care": [5, 4, 5, 4] * 6,
+                "Interest_in_Hearing_App": ["Yes", "Yes", "Maybe", "Yes"] * 6,
+                "Paid_App_Test_Interest": ["Maybe, if it offers good value", "No", "Yes", "Maybe, if it offers good value"] * 6,
+                "Age_group": ["18 - 24", "25 - 34", "18 - 24", "35 - 44"] * 6,
+                "Ear_Discomfort_After_Use": ["No", "Yes", "Yes", "No"] * 6,
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "survey_sentiment")
+        self.assertEqual(detected["analysis"]["profile"], "wellbeing")
+
+        analysis = analyze_survey_context(context)
+        self.assertIsNotNone(analysis)
+        dashboard = build_survey_dashboard(
+            analysis=analysis,
+            approved_insight_ids=None,
+            settings={"included_sections": ["overview", "barriers", "wellbeing", "demographics", "notes"]},
+        )
+        self.assertIsNotNone(dashboard)
+        self.assertIn("Wellbeing Survey Narrative", dashboard["html"])
 
     def test_build_web_analytics_dashboard_for_funnel_data(self) -> None:
         df = pd.DataFrame(

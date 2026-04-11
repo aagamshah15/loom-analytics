@@ -31,6 +31,7 @@ Use this checklist before major deploys and after any workflow, template, or das
 1. Run `make dev`
 2. Run `make health`
 3. Run `make test`
+4. Run `make test-templates`
 4. Run `make test-ui`
 
 ## Hosted Smoke
@@ -38,12 +39,40 @@ Use this checklist before major deploys and after any workflow, template, or das
 1. Run `make smoke-prod`
 2. Open the live app at [https://loom-analytics.netlify.app](https://loom-analytics.netlify.app)
 3. Confirm the landing page renders with Loom branding
-4. Upload one real CSV for each implemented template:
+4. Upload one canonical fixture for each implemented template:
    - financial
    - e-commerce
    - healthcare
+   - marketing
    - HR/workforce
+   - survey/sentiment
+   - web analytics
 5. Build one dashboard for each template and export static HTML
+
+## Template Matrix
+
+Use the checked-in fixture matrix instead of hunting for ad hoc CSVs:
+
+- Manifest: `tests/fixtures/template_manifest.json`
+- Canonical stress fixtures:
+  - `tests/fixtures/stress/financial/`
+  - `tests/fixtures/stress/ecommerce/`
+  - `tests/fixtures/stress/healthcare/`
+  - `tests/fixtures/stress/hr/`
+  - `tests/fixtures/stress/marketing/`
+  - `tests/fixtures/stress/survey/`
+  - `tests/fixtures/stress/web_analytics/`
+  - `tests/fixtures/stress/generic/`
+
+For each implemented template, verify at minimum:
+- one `happy_path.csv`
+- one `noisy_valid.csv`
+- one `ambiguous_schema.csv`
+- one `partial_invalid.csv`
+
+Where Loom supports multiple schema families, also use the checked-in schema variants:
+- healthcare: `admissions_canon.csv`, `insurance_risk_canon.csv`
+- marketing: `lead_generation_canon.csv`, `closed_deals_canon.csv`
 
 ## Workflow Checks
 
@@ -89,6 +118,7 @@ Use this checklist before major deploys and after any workflow, template, or das
 - Header-only CSV
 - Duplicate headers
 - Mixed numeric/string columns
+- Mixed delimiter and alias-heavy files
 - UTF-8 BOM
 - Long text cells
 - Sparse columns

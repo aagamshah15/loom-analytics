@@ -1,0 +1,25 @@
+Name,Age,Gender,Medical Condition,Date of Admission,Discharge Date,Insurance Provider,Billing Amount,Admission Type,Medication,Test Results
+Patient 1,34,Female,Obesity,2024-01-01,2024-01-11,Medicare,22000,Emergency,Metformin,Normal
+Patient 2,35,Male,Diabetes,2024-01-07,2024-01-19,Aetna,23150,Elective,Lisinopril,Abnormal
+Patient 3,36,Female,Hypertension,2024-01-13,2024-01-27,Blue Cross,24300,Urgent,Atorvastatin,Inconclusive
+Patient 4,37,Male,Arthritis,2024-01-19,2024-02-04,Cigna,25450,Emergency,Semaglutide,Normal
+Patient 5,38,Female,Obesity,2024-01-25,2024-02-12,Medicare,26600,Elective,Metformin,Abnormal
+Patient 6,39,Male,Diabetes,2024-01-31,2024-02-10,Aetna,27750,Urgent,Lisinopril,Inconclusive
+Patient 7,40,Female,Hypertension,2024-02-06,2024-02-18,Blue Cross,28900,Emergency,Atorvastatin,Normal
+Patient 8,41,Male,Arthritis,2024-02-12,2024-02-26,Cigna,22000,Elective,Semaglutide,Abnormal
+Patient 9,42,Female,Obesity,2024-02-18,2024-03-05,Medicare,23150,Urgent,Metformin,Inconclusive
+Patient 10,43,Male,Diabetes,2024-02-24,2024-03-13,Aetna,24300,Emergency,Lisinopril,Normal
+Patient 11,44,Female,Hypertension,2024-03-01,2024-03-11,Blue Cross,25450,Elective,Atorvastatin,Abnormal
+Patient 12,45,Male,Arthritis,2024-03-07,2024-03-19,Cigna,26600,Urgent,Semaglutide,Inconclusive
+Patient 13,46,Female,Obesity,2024-03-13,2024-03-27,Medicare,27750,Emergency,Metformin,Normal
+Patient 14,47,Male,Diabetes,2024-03-19,2024-04-04,Aetna,28900,Elective,Lisinopril,Abnormal
+Patient 15,48,Female,Hypertension,2024-03-25,2024-04-12,Blue Cross,22000,Urgent,Atorvastatin,Inconclusive
+Patient 16,49,Male,Arthritis,2024-03-31,2024-04-10,Cigna,23150,Emergency,Semaglutide,Normal
+Patient 17,50,Female,Obesity,2024-04-06,2024-04-18,Medicare,24300,Elective,Metformin,Abnormal
+Patient 18,51,Male,Diabetes,2024-04-12,2024-04-26,Aetna,25450,Urgent,Lisinopril,Inconclusive
+Patient 19,52,Female,Hypertension,2024-04-18,2024-05-04,Blue Cross,26600,Emergency,Atorvastatin,Normal
+Patient 20,53,Male,Arthritis,2024-04-24,2024-05-12,Cigna,27750,Elective,Semaglutide,Abnormal
+Patient 21,54,Female,Obesity,2024-04-30,2024-05-10,Medicare,28900,Urgent,Metformin,Inconclusive
+Patient 22,55,Male,Diabetes,2024-05-06,2024-05-18,Aetna,22000,Emergency,Lisinopril,Normal
+Patient 23,56,Female,Hypertension,2024-05-12,2024-05-26,Blue Cross,23150,Elective,Atorvastatin,Abnormal
+Patient 24,57,Male,Arthritis,2024-05-18,2024-06-03,Cigna,24300,Urgent,Semaglutide,Inconclusive

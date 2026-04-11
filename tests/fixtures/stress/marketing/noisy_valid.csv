@@ -1,0 +1,25 @@
+campaign_name;marketing_channel;budget;return_value;test_group;platform;landing_bounce_rate;impression_count;audience_age
+cmp1;TV/Radio;1200000;144000;Control;Desktop;0.33;400000;18-24
+cmp2;Display;1450000;203000;Variant A;Mobile;0.39;455000;25-34
+cmp3;Email;1700000;1326000;Variant B;Connected TV;0.45;510000;35-44
+cmp4;Paid Search;1950000;604500;Control;Desktop;0.51;565000;45-54
+cmp5;Connected TV;2200000;1100000;Variant A;Mobile;0.33;620000;18-24
+cmp6;Social;1200000;312000;Variant B;Connected TV;0.45;675000;25-34
+cmp7;TV/Radio;1450000;174000;Control;Desktop;0.45;400000;35-44
+cmp8;Display;1700000;238000;Variant A;Mobile;0.51;455000;45-54
+cmp9;Email;1950000;1521000;Variant B;Connected TV;0.33;510000;18-24
+cmp10;Paid Search;2200000;682000;Control;Desktop;0.39;565000;25-34
+cmp11;Connected TV;1200000;600000;Variant A;Mobile;0.45;620000;35-44
+cmp12;Social;1450000;377000;Variant B;Connected TV;0.57;675000;45-54
+cmp13;TV/Radio;1700000;204000;Control;Desktop;0.33;400000;18-24
+cmp14;Display;1950000;273000;Variant A;Mobile;0.39;455000;25-34
+cmp15;Email;2200000;1716000;Variant B;Connected TV;0.45;510000;35-44
+cmp16;Paid Search;1200000;372000;Control;Desktop;0.51;565000;45-54
+cmp17;Connected TV;1450000;725000;Variant A;Mobile;0.33;620000;18-24
+cmp18;Social;1700000;442000;Variant B;Connected TV;0.45;675000;25-34
+cmp19;TV/Radio;1950000;234000;Control;Desktop;0.45;400000;35-44
+cmp20;Display;2200000;308000;Variant A;Mobile;0.51;455000;45-54
+cmp21;Email;1200000;936000;Variant B;Connected TV;0.33;510000;18-24
+cmp22;Paid Search;1450000;449500;Control;Desktop;0.39;565000;25-34
+cmp23;Connected TV;1700000;850000;Variant A;Mobile;0.45;620000;35-44
+cmp24;Social;1950000;507000;Variant B;Connected TV;0.57;675000;45-54

@@ -1,0 +1,21 @@
+persona;customer_tenure_months;nps_score;effort_score;recommend_flag;renew_intent;feature_reporting_score;reliability;feedback_theme
+Executive;72;9;1.8;yes;4.8;4.5;4.8;Missing features
+Executive;65;8;2.0;yes;4.5;4.2;4.6;Missing features
+Executive;80;9;1.9;yes;4.9;4.3;4.7;Reporting
+Executive;58;7;2.5;yes;4.1;4.0;4.5;Reporting
+Executive;62;8;2.2;yes;4.3;4.1;4.4;Pricing
+End User;1;2;4.8;no;1.4;2.1;4.0;Missing features
+End User;2;3;4.7;no;1.8;2.3;4.1;Missing features
+End User;2;1;4.9;no;1.2;1.9;4.2;Reporting
+End User;3;4;4.5;yes;2.0;2.5;4.0;Reporting
+End User;4;5;4.0;yes;2.2;2.7;4.1;Support
+End User;7;6;3.9;yes;2.7;3.0;4.2;Missing features
+End User;8;5;3.8;yes;2.9;3.1;4.1;Usability
+End User;10;6;3.7;yes;3.0;3.2;4.3;Reporting
+End User;14;7;3.1;yes;3.5;3.4;4.4;Support
+End User;18;8;2.9;yes;3.8;3.5;4.5;Pricing
+Executive;84;9;1.7;yes;4.9;4.4;4.9;Reporting
+Executive;90;8;1.8;yes;4.6;4.3;4.8;Missing features
+End User;3;4;4.2;no;1.9;2.4;4.0;Missing features
+End User;5;5;3.6;yes;2.4;2.8;4.2;Reporting
+End User;6;6;3.4;yes;2.7;3.0;4.3;Usability

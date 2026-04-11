@@ -1,0 +1,6 @@
+customer_id,role,tenure_months,sentiment_score,recommend_binary,notes
+c1,Executive,6,4.2,1,good buyer signal
+c2,End User,2,2.1,0,onboarding rough
+c3,Executive,12,4.5,1,positive
+c4,End User,1,1.8,0,missing features
+c5,End User,4,2.4,0,low confidence

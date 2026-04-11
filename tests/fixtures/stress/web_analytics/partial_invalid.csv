@@ -1,0 +1,5 @@
+device,channel,page,sessions,bounce_rate,campaign,scroll_depth,avg_time_on_page,visitor_type,exit_count
+Mobile,Social,Home,520,61,Social Prospecting,32,120,New,160
+Desktop,Paid Search,Pricing,300,34,Brand Search,58,150,Returning,54
+Tablet,Email,Dashboard,180,28,Onboarding Email,69,340,Returning,20
+Mobile,Organic,Blog,240,40,Lifecycle Nurture,48,290,Returning,60
