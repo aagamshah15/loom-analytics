@@ -538,6 +538,16 @@ function sectionLabelMapForKind(
         notes: "Insight notes",
       };
     }
+    if (profile === "claims_fraud") {
+      return {
+        overview: "KPI cards and key insights",
+        fraud: "Charts: fraud concentration",
+        providers: "Charts: provider review",
+        billing: "Charts: billing and payer friction",
+        utilization: "Charts: diagnosis and procedure signals",
+        notes: "Insight notes",
+      };
+    }
     return {
       overview: "KPI cards and key insights",
       adherence: "Charts: adherence and outcomes",

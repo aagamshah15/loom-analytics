@@ -57,6 +57,37 @@ INSURANCE_REQUIRED_COLUMN_ALIASES = {
     "charges": ["charges", "cost", "billing amount", "billing_amount"],
 }
 
+CLAIMS_REQUIRED_COLUMN_ALIASES = {
+    "claim_id": ["claim_id", "claim", "claim_number", "claim no", "claim_no"],
+    "provider_id": ["provider_id", "provider", "provider_npi", "npi", "doctor_id"],
+    "diagnosis": ["diagnosis_code", "diagnosis", "primary_diagnosis", "icd_code", "condition"],
+    "procedure": ["procedure_code", "procedure", "cpt_code", "service_code"],
+    "claim_amount": ["claim_amount", "claimed_amount", "submitted_amount", "billed_amount", "billing amount", "charges"],
+    "approved_amount": ["approved_amount", "paid_amount", "allowed_amount", "reimbursed_amount", "payment_amount"],
+    "insurance": ["insurance_type", "insurance", "payer_type", "payer", "plan_type"],
+    "status": ["claim_status", "status", "approval_status", "claim_outcome"],
+    "fraud": ["is_fraud", "fraud", "fraud_flag", "fraudulent", "is_fraudulent"],
+}
+
+CLAIMS_OPTIONAL_COLUMN_ALIASES = {
+    "patient_age": ["patient_age", "age"],
+    "patient_gender": ["patient_gender", "gender", "sex"],
+    "submission_date": ["claim_submission_date", "submission_date", "claim_date", "date"],
+    "days_to_claim": ["days_between_service_and_claim", "days_to_claim", "submission_lag", "claim_delay"],
+    "provider_monthly_claims": [
+        "number_of_claims_per_provider_monthly",
+        "claims_per_provider_monthly",
+        "provider_monthly_claims",
+        "monthly_claim_count",
+    ],
+    "provider_specialty": ["provider_specialty", "specialty", "department", "practice_area"],
+    "patient_state": ["patient_state", "state", "region"],
+    "length_of_stay": ["length_of_stay", "los"],
+    "visit_type": ["visit_type", "encounter_type", "admission_type"],
+    "chronic_condition": ["chronic_condition_flag", "chronic_condition", "chronic_flag"],
+    "prior_visits": ["prior_visits_12m", "prior_visits", "previous_visits"],
+}
+
 FOCUS_KEYWORDS = {
     "adherence": ["adherence", "medication", "compliance"],
     "telehealth": ["telehealth", "virtual", "visit type", "visit mode"],
@@ -70,6 +101,10 @@ FOCUS_KEYWORDS = {
     "risk_factors": ["smoker", "smoking", "bmi", "obesity", "risk"],
     "pricing": ["pricing", "charges", "cost", "region"],
     "demographics": ["age", "gender", "children", "region"],
+    "fraud": ["fraud", "abuse", "suspicious"],
+    "claims": ["claim", "claims", "procedure", "diagnosis", "cpt", "icd"],
+    "providers": ["provider", "specialty", "doctor", "npi"],
+    "payer": ["payer", "insurance", "approved", "denied", "rejected"],
 }
 
 PROMPT_STOP_WORDS = {
@@ -126,6 +161,15 @@ INSURANCE_SECTION_CONFIG = {
     "notes": "Insight notes",
 }
 
+CLAIMS_SECTION_CONFIG = {
+    "overview": "KPI cards and key insights",
+    "fraud": "Charts: fraud concentration and claim risk",
+    "providers": "Charts: provider specialty and volume patterns",
+    "billing": "Charts: claim amounts, approvals, and payer friction",
+    "utilization": "Charts: visit, diagnosis, and procedure mix",
+    "notes": "Insight notes",
+}
+
 
 def analyze_healthcare_context(context: PipelineContext) -> Optional[dict[str, Any]]:
     df = context.clean_df if context.clean_df is not None else context.raw_df
@@ -136,6 +180,7 @@ def analyze_healthcare_context(context: PipelineContext) -> Optional[dict[str, A
         _analyze_outcomes_context(df)
         or _analyze_admissions_context(df)
         or _analyze_insurance_context(df)
+        or _analyze_claims_context(df)
     )
 
 
@@ -276,6 +321,8 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
         return _build_admissions_insight_candidates(analysis, user_prompt)
     if profile == "insurance_risk":
         return _build_insurance_insight_candidates(analysis, user_prompt)
+    if profile == "claims_fraud":
+        return _build_claims_insight_candidates(analysis, user_prompt)
 
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
@@ -578,6 +625,118 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
     return {"insights": insights, "focus_tags": focus_tags}
 
 
+def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
+    summary = analysis["summary"]
+    focus_tags = extract_focus_tags(user_prompt)
+
+    insights = [
+        {
+            "id": "claims_fraud_baseline",
+            "title": "Fraud is measurable enough to manage directly",
+            "category": "fraud",
+            "severity": "high" if summary["fraud_rate"] >= 5 else "medium",
+            "summary": (
+                f"{summary['fraud_rate']:.1f}% of claims are flagged as fraud across "
+                f"{summary['claim_count']:,} claims and {summary['provider_count']:,} providers."
+            ),
+            "detail": "That is enough signal for a claims-control dashboard: the useful question is no longer whether fraud exists, but where it clusters by provider, specialty, payer, and claim shape.",
+            "metric_label": "Fraud rate",
+            "metric_value": f"{summary['fraud_rate']:.1f}%",
+            "metric_sub": "of all claims",
+            "tags": ["fraud", "claims"],
+            "section": "fraud",
+            "priority": 100,
+        },
+        {
+            "id": "specialty_fraud_concentration",
+            "title": "Provider specialty is carrying fraud concentration",
+            "category": "providers",
+            "severity": "high",
+            "summary": f"{summary['top_specialty']} has the highest fraud flag rate at {summary['top_specialty_fraud']:.1f}%.",
+            "detail": "Specialty-level concentration is a better operational review queue than treating every provider the same. It narrows audit attention without requiring patient-level modeling.",
+            "metric_label": "Top specialty fraud",
+            "metric_value": f"{summary['top_specialty_fraud']:.1f}%",
+            "metric_sub": summary["top_specialty"],
+            "tags": ["providers", "fraud"],
+            "section": "providers",
+            "priority": 97,
+        },
+        {
+            "id": "high_claims_need_separate_review",
+            "title": "High-dollar claims deserve a separate review lane",
+            "category": "billing",
+            "severity": "medium",
+            "summary": (
+                f"Top-decile claim amounts show {summary['high_claim_fraud']:.1f}% fraud versus "
+                f"{summary['regular_claim_fraud']:.1f}% for the rest of the book."
+            ),
+            "detail": "Even when fraud rate is not dramatically higher, the exposure per bad claim is larger. High-dollar claims should be triaged by dollar risk, not just by raw fraud probability.",
+            "metric_label": "High-claim fraud",
+            "metric_value": f"{summary['high_claim_fraud']:.1f}%",
+            "metric_sub": "top 10% claim amount",
+            "tags": ["billing", "fraud", "claims"],
+            "section": "billing",
+            "priority": 94,
+        },
+        {
+            "id": "approval_gap_is_a_leakage_signal",
+            "title": "Approval gaps reveal payer friction",
+            "category": "payer",
+            "severity": "medium",
+            "summary": (
+                f"Approved amounts run {summary['avg_approval_gap_pct']:.1f}% below submitted claims on average, "
+                f"with {summary['top_insurance']} showing the highest rejection rate at {summary['top_insurance_denial']:.1f}%."
+            ),
+            "detail": "That gap is useful even when it is not fraud: it shows where documentation, payer policy, or coding friction is forcing money out of the submitted claim.",
+            "metric_label": "Avg approval gap",
+            "metric_value": f"{summary['avg_approval_gap_pct']:.1f}%",
+            "metric_sub": "submitted vs approved",
+            "tags": ["payer", "billing", "cost"],
+            "section": "billing",
+            "priority": 91,
+        },
+        {
+            "id": "diagnosis_code_outliers",
+            "title": "Diagnosis codes create a claims-review shortcut",
+            "category": "utilization",
+            "severity": "medium",
+            "summary": f"Diagnosis code {summary['top_diagnosis']} has the highest fraud rate at {summary['top_diagnosis_fraud']:.1f}%.",
+            "detail": "Diagnosis and procedure codes are structured enough to create deterministic review queues before a full machine-learning fraud model exists.",
+            "metric_label": "Top diagnosis fraud",
+            "metric_value": f"{summary['top_diagnosis_fraud']:.1f}%",
+            "metric_sub": summary["top_diagnosis"],
+            "tags": ["claims", "fraud", "diagnosis"],
+            "section": "utilization",
+            "priority": 89,
+        },
+        {
+            "id": "provider_volume_watchlist",
+            "title": "Provider volume exposes audit leverage",
+            "category": "providers",
+            "severity": "medium",
+            "summary": (
+                f"{summary['busiest_provider']} is the busiest provider with {summary['busiest_provider_claims']:,} claims "
+                f"and a {summary['busiest_provider_fraud']:.1f}% fraud rate."
+            ),
+            "detail": "A high-volume provider does not automatically mean fraud, but it does mean review effort has more leverage when something looks off.",
+            "metric_label": "Busiest provider",
+            "metric_value": f"{summary['busiest_provider_claims']:,}",
+            "metric_sub": f"{summary['busiest_provider_fraud']:.1f}% fraud rate",
+            "tags": ["providers", "claims"],
+            "section": "providers",
+            "priority": 86,
+        },
+    ]
+
+    prompt_terms = extract_prompt_terms(user_prompt)
+    for item in insights:
+        focus_bonus = _instruction_bonus(item, focus_tags, prompt_terms)
+        item["score"] = item["priority"] + focus_bonus
+        item["recommended"] = item["score"] >= 85
+    insights.sort(key=lambda item: (-item["score"], item["title"]))
+    return {"insights": insights, "focus_tags": focus_tags}
+
+
 def build_business_dashboard(
     context: Optional[PipelineContext] = None,
     analysis: Optional[dict[str, Any]] = None,
@@ -678,6 +837,8 @@ def _section_config_for_profile(profile: Optional[str]) -> dict[str, str]:
         return ADMISSIONS_SECTION_CONFIG
     if profile == "insurance_risk":
         return INSURANCE_SECTION_CONFIG
+    if profile == "claims_fraud":
+        return CLAIMS_SECTION_CONFIG
     return OUTCOMES_SECTION_CONFIG
 
 
@@ -898,6 +1059,140 @@ def _analyze_insurance_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
     }
 
 
+def _analyze_claims_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    detected = _detect_columns(df, CLAIMS_REQUIRED_COLUMN_ALIASES, CLAIMS_OPTIONAL_COLUMN_ALIASES)
+    if detected is None:
+        return None
+
+    optional = detected["optional"]
+    working = pd.DataFrame(
+        {
+            "claim_id": df[detected["required"]["claim_id"]].astype(str).str.strip(),
+            "provider_id": df[detected["required"]["provider_id"]].astype(str).str.strip(),
+            "diagnosis": df[detected["required"]["diagnosis"]].astype(str).str.strip(),
+            "procedure": df[detected["required"]["procedure"]].astype(str).str.strip(),
+            "claim_amount": pd.to_numeric(df[detected["required"]["claim_amount"]], errors="coerce"),
+            "approved_amount": pd.to_numeric(df[detected["required"]["approved_amount"]], errors="coerce"),
+            "insurance": df[detected["required"]["insurance"]].astype(str).str.strip(),
+            "status": df[detected["required"]["status"]].astype(str).str.strip(),
+            "fraud": _normalize_binary(df[detected["required"]["fraud"]]),
+            "specialty": _optional_text(df, optional.get("provider_specialty"), "Unknown"),
+            "visit_type": _optional_text(df, optional.get("visit_type"), "Unknown"),
+            "days_to_claim": _optional_numeric(df, optional.get("days_to_claim")),
+            "provider_monthly_claims": _optional_numeric(df, optional.get("provider_monthly_claims")),
+            "length_of_stay": _optional_numeric(df, optional.get("length_of_stay")),
+            "chronic_condition": _optional_numeric(df, optional.get("chronic_condition")),
+            "prior_visits": _optional_numeric(df, optional.get("prior_visits")),
+        }
+    ).dropna(subset=["claim_id", "provider_id", "claim_amount", "approved_amount", "fraud"])
+
+    if len(working) < 20:
+        return None
+
+    working["approval_gap"] = working["claim_amount"] - working["approved_amount"]
+    working["approval_gap_pct"] = (working["approval_gap"] / working["claim_amount"].replace(0, pd.NA)).fillna(0).clip(lower=0) * 100
+    working["rejected"] = working["status"].astype(str).str.lower().str.contains("reject|denied|deny").astype(float)
+    working["high_claim"] = working["claim_amount"] >= working["claim_amount"].quantile(0.90)
+
+    fraud_by_specialty = _sorted_rate_series(working, "specialty", "fraud")
+    fraud_by_visit_type = _sorted_rate_series(working, "visit_type", "fraud")
+    fraud_by_insurance = _sorted_rate_series(working, "insurance", "fraud")
+    denial_by_insurance = _sorted_rate_series(working, "insurance", "rejected")
+    claim_amount_by_specialty = working.groupby("specialty")["claim_amount"].mean().sort_values(ascending=False)
+    status_share = working["status"].value_counts(normalize=True).mul(100).sort_values(ascending=False)
+    diagnosis_fraud = _sorted_rate_series(working, "diagnosis", "fraud")
+    top_provider_volume = (
+        working.groupby("provider_id")
+        .agg(claims=("claim_id", "size"), fraud_rate=("fraud", "mean"), avg_claim=("claim_amount", "mean"))
+        .sort_values(["claims", "fraud_rate"], ascending=False)
+        .head(8)
+    )
+
+    high_claim_fraud = float(working.loc[working["high_claim"], "fraud"].mean() * 100)
+    regular_claim_fraud = float(working.loc[~working["high_claim"], "fraud"].mean() * 100)
+    avg_approval_gap = float(working["approval_gap"].mean())
+    avg_approval_gap_pct = float(working["approval_gap_pct"].mean())
+    fraud_approval_gap = float(working.loc[working["fraud"].eq(1.0), "approval_gap_pct"].mean())
+    non_fraud_approval_gap = float(working.loc[working["fraud"].eq(0.0), "approval_gap_pct"].mean())
+    top_specialty = str(fraud_by_specialty.index[0])
+    top_specialty_fraud = float(fraud_by_specialty.iloc[0])
+    top_insurance = str(denial_by_insurance.index[0])
+    top_insurance_denial = float(denial_by_insurance.iloc[0])
+    top_diagnosis = str(diagnosis_fraud.index[0])
+    top_diagnosis_fraud = float(diagnosis_fraud.iloc[0])
+    busiest_provider = str(top_provider_volume.index[0])
+    busiest_provider_claims = int(top_provider_volume.iloc[0]["claims"])
+    busiest_provider_fraud = float(top_provider_volume.iloc[0]["fraud_rate"] * 100)
+
+    return {
+        "kind": "healthcare_medical",
+        "profile": "claims_fraud",
+        "column_map": detected,
+        "dataset": {
+            "row_count": int(len(working)),
+            "column_count": int(len(df.columns)),
+            "input_columns": list(df.columns),
+        },
+        "summary": {
+            "claim_count": int(len(working)),
+            "provider_count": int(working["provider_id"].nunique()),
+            "avg_claim_amount": float(working["claim_amount"].mean()),
+            "avg_approved_amount": float(working["approved_amount"].mean()),
+            "fraud_rate": float(working["fraud"].mean() * 100),
+            "rejection_rate": float(working["rejected"].mean() * 100),
+            "avg_approval_gap": avg_approval_gap,
+            "avg_approval_gap_pct": avg_approval_gap_pct,
+            "fraud_approval_gap_pct": fraud_approval_gap,
+            "non_fraud_approval_gap_pct": non_fraud_approval_gap,
+            "high_claim_fraud": high_claim_fraud,
+            "regular_claim_fraud": regular_claim_fraud,
+            "top_specialty": top_specialty,
+            "top_specialty_fraud": top_specialty_fraud,
+            "top_insurance": top_insurance,
+            "top_insurance_denial": top_insurance_denial,
+            "top_diagnosis": top_diagnosis,
+            "top_diagnosis_fraud": top_diagnosis_fraud,
+            "busiest_provider": busiest_provider,
+            "busiest_provider_claims": busiest_provider_claims,
+            "busiest_provider_fraud": busiest_provider_fraud,
+        },
+        "signals": {
+            "fraud_by_specialty": {
+                "labels": fraud_by_specialty.head(8).index.tolist(),
+                "values": [round(float(value), 2) for value in fraud_by_specialty.head(8).tolist()],
+            },
+            "claim_amount_by_specialty": {
+                "labels": claim_amount_by_specialty.head(8).index.tolist(),
+                "values": [round(float(value), 2) for value in claim_amount_by_specialty.head(8).tolist()],
+            },
+            "fraud_by_visit_type": {
+                "labels": fraud_by_visit_type.index.tolist(),
+                "values": [round(float(value), 2) for value in fraud_by_visit_type.tolist()],
+            },
+            "fraud_by_insurance": {
+                "labels": fraud_by_insurance.index.tolist(),
+                "values": [round(float(value), 2) for value in fraud_by_insurance.tolist()],
+            },
+            "denial_by_insurance": {
+                "labels": denial_by_insurance.index.tolist(),
+                "values": [round(float(value), 2) for value in denial_by_insurance.tolist()],
+            },
+            "status_share": {
+                "labels": status_share.index.tolist(),
+                "values": [round(float(value), 2) for value in status_share.tolist()],
+            },
+            "diagnosis_fraud": {
+                "labels": diagnosis_fraud.head(8).index.tolist(),
+                "values": [round(float(value), 2) for value in diagnosis_fraud.head(8).tolist()],
+            },
+            "top_provider_volume": {
+                "labels": top_provider_volume.index.tolist(),
+                "values": [int(value) for value in top_provider_volume["claims"].tolist()],
+            },
+        },
+    }
+
+
 def _detect_columns(
     df: pd.DataFrame,
     required_aliases: dict[str, list[str]],
@@ -988,6 +1283,22 @@ def _highest_other_value(series: pd.Series, excluded_labels: list[str]) -> Optio
     return max(remaining) if remaining else None
 
 
+def _optional_text(df: pd.DataFrame, column: Optional[str], fallback: str) -> pd.Series:
+    if column is None:
+        return pd.Series([fallback] * len(df), index=df.index)
+    return df[column].astype(str).str.strip().replace({"": fallback, "nan": fallback, "None": fallback})
+
+
+def _optional_numeric(df: pd.DataFrame, column: Optional[str]) -> pd.Series:
+    if column is None:
+        return pd.Series([pd.NA] * len(df), index=df.index, dtype="Float64")
+    return pd.to_numeric(df[column], errors="coerce")
+
+
+def _sorted_rate_series(df: pd.DataFrame, group_column: str, target_column: str) -> pd.Series:
+    return df.groupby(group_column)[target_column].mean().mul(100).sort_values(ascending=False)
+
+
 def _default_sections(insights: list[dict[str, Any]], analysis: Optional[dict[str, Any]] = None) -> list[str]:
     profile = (analysis or {}).get("profile")
     sections = ["overview"]
@@ -1036,7 +1347,176 @@ def _build_layout_sections(
     summary = analysis["summary"]
     profile = analysis.get("profile", "outcomes")
 
-    if profile == "admissions":
+    if profile == "claims_fraud":
+        section_map = {
+            "overview": {
+                "id": "overview",
+                "title": "Claims Control Narrative",
+                "description": "A fast read on fraud concentration, provider patterns, and claim approval friction.",
+                "blocks": [
+                    {
+                        "id": "overview-metrics",
+                        "kind": "metric_grid",
+                        "cards": [_metric_card_from_insight(card) for card in metric_cards],
+                    },
+                    {
+                        "id": "overview-insights",
+                        "kind": "insight_grid",
+                        "insights": [_insight_card(insight) for insight in approved_insights[:4]],
+                    },
+                ],
+            },
+            "fraud": {
+                "id": "fraud",
+                "title": "Fraud Concentration",
+                "description": "Fraud review gets sharper when it is sliced by specialty, visit type, and payer mix.",
+                "blocks": [
+                    {
+                        "id": "fraud-by-specialty",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "fraud-by-specialty",
+                            "title": "Fraud rate by provider specialty",
+                            "subtitle": "Specialty concentration creates the first audit queue.",
+                            "type": "bar",
+                            "labels": signals["fraud_by_specialty"]["labels"],
+                            "series": [{"name": "Fraud rate", "values": signals["fraud_by_specialty"]["values"], "color": "#c2410c"}],
+                            "format": "percent",
+                        },
+                    },
+                    {
+                        "id": "fraud-by-visit-type",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "fraud-by-visit-type",
+                            "title": "Fraud rate by visit type",
+                            "subtitle": "Encounter setting can reveal where coding and review pressure differ.",
+                            "type": "bar",
+                            "labels": signals["fraud_by_visit_type"]["labels"],
+                            "series": [{"name": "Fraud rate", "values": signals["fraud_by_visit_type"]["values"], "color": "#9a3412"}],
+                            "format": "percent",
+                        },
+                    },
+                ],
+            },
+            "providers": {
+                "id": "providers",
+                "title": "Provider Review",
+                "description": "Provider volume and specialty-level fraud rates help prioritize audit effort.",
+                "blocks": [
+                    {
+                        "id": "top-provider-volume",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "top-provider-volume",
+                            "title": "Highest-volume providers",
+                            "subtitle": "Volume is not guilt, but it increases audit leverage.",
+                            "type": "bar",
+                            "labels": signals["top_provider_volume"]["labels"],
+                            "series": [{"name": "Claim count", "values": signals["top_provider_volume"]["values"], "color": "#57534e"}],
+                            "format": "number",
+                        },
+                    },
+                    {
+                        "id": "claim-amount-by-specialty",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "claim-amount-by-specialty",
+                            "title": "Average claim amount by specialty",
+                            "subtitle": "Dollar exposure adds priority to the fraud review queue.",
+                            "type": "bar",
+                            "labels": signals["claim_amount_by_specialty"]["labels"],
+                            "series": [{"name": "Average claim amount", "values": signals["claim_amount_by_specialty"]["values"], "color": "#292524"}],
+                            "format": "currency",
+                        },
+                    },
+                ],
+            },
+            "billing": {
+                "id": "billing",
+                "title": "Billing and Payer Friction",
+                "description": "Submitted, approved, rejected, and pending claims tell different parts of the leakage story.",
+                "blocks": [
+                    {
+                        "id": "denial-by-insurance",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "denial-by-insurance",
+                            "title": "Rejection rate by insurance type",
+                            "subtitle": "Payer friction points to documentation, coding, or policy gaps.",
+                            "type": "bar",
+                            "labels": signals["denial_by_insurance"]["labels"],
+                            "series": [{"name": "Rejection rate", "values": signals["denial_by_insurance"]["values"], "color": "#b45309"}],
+                            "format": "percent",
+                        },
+                    },
+                    {
+                        "id": "claim-status-share",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "claim-status-share",
+                            "title": "Claim status mix",
+                            "subtitle": "Approved, pending, and rejected shares show where the claims queue is leaking motion.",
+                            "type": "pie",
+                            "labels": signals["status_share"]["labels"],
+                            "series": [{"name": "Share", "values": signals["status_share"]["values"], "color": "#0f766e"}],
+                            "format": "percent",
+                        },
+                    },
+                    {
+                        "id": "claims-summary-stats",
+                        "kind": "stat_list",
+                        "title": "Claims markers",
+                        "items": [
+                            {"label": "Average claim", "value": f"${summary['avg_claim_amount']:,.0f}", "tone": "default"},
+                            {"label": "Average approved", "value": f"${summary['avg_approved_amount']:,.0f}", "tone": "default"},
+                            {"label": "Rejection rate", "value": f"{summary['rejection_rate']:.1f}%", "tone": "warning"},
+                            {"label": "Average approval gap", "value": f"{summary['avg_approval_gap_pct']:.1f}%", "tone": "warning"},
+                        ],
+                    },
+                ],
+            },
+            "utilization": {
+                "id": "utilization",
+                "title": "Diagnosis and Procedure Signals",
+                "description": "Structured diagnosis and procedure fields are enough to start deterministic review queues.",
+                "blocks": [
+                    {
+                        "id": "diagnosis-fraud",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "diagnosis-fraud",
+                            "title": "Fraud rate by diagnosis code",
+                            "subtitle": "Diagnosis-level outliers can become the first rule-based review list.",
+                            "type": "bar",
+                            "labels": signals["diagnosis_fraud"]["labels"],
+                            "series": [{"name": "Fraud rate", "values": signals["diagnosis_fraud"]["values"], "color": "#166534"}],
+                            "format": "percent",
+                        },
+                    },
+                    {
+                        "id": "fraud-by-insurance",
+                        "kind": "chart",
+                        "chart": {
+                            "id": "fraud-by-insurance",
+                            "title": "Fraud rate by insurance type",
+                            "subtitle": "Payer mix matters for review priority, not only for reimbursement.",
+                            "type": "bar",
+                            "labels": signals["fraud_by_insurance"]["labels"],
+                            "series": [{"name": "Fraud rate", "values": signals["fraud_by_insurance"]["values"], "color": "#0f766e"}],
+                            "format": "percent",
+                        },
+                    },
+                ],
+            },
+            "notes": {
+                "id": "notes",
+                "title": "Approved Insight Notes",
+                "description": "Narrative notes that travel with the dashboard when it reaches claims, audit, and operations teams.",
+                "blocks": [{"id": "approved-note-list", "kind": "note_list", "insights": [_insight_card(insight) for insight in approved_insights]}],
+            },
+        }
+    elif profile == "admissions":
         section_map = {
             "overview": {
                 "id": "overview",

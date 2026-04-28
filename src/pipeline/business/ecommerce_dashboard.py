@@ -78,7 +78,9 @@ SECTION_CONFIG = {
 
 
 def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, Any]]:
-    df = context.clean_df if context.clean_df is not None else context.raw_df
+    # Template detection should preserve business-shape columns even when the
+    # cleaner drops constant categorical fields from very uniform smoke data.
+    df = context.raw_df if context.raw_df is not None else context.clean_df
     if df is None or df.empty:
         return None
 

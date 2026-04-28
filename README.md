@@ -8,6 +8,9 @@ Loom is a CSV-to-dashboard product with three layers:
 
 The product flow is now geared toward business users: upload a CSV, detect the right specialized template, review non-obvious insights, approve the story, and build a shareable dashboard.
 
+Live app: [https://loom-analytics.netlify.app/](https://loom-analytics.netlify.app/)  
+Production API: [https://loom-analytics.onrender.com](https://loom-analytics.onrender.com)
+
 ## What’s Included
 
 - Modular pipeline stages under `src/pipeline`
@@ -194,6 +197,12 @@ Optional overrides:
 LOOM_FRONTEND_URL=https://your-frontend.example.com LOOM_BACKEND_URL=https://your-backend.example.com make smoke-prod
 ```
 
+Current production values:
+
+```bash
+LOOM_FRONTEND_URL=https://loom-analytics.netlify.app LOOM_BACKEND_URL=https://loom-analytics.onrender.com make smoke-prod
+```
+
 ## Troubleshooting
 
 - If `make dev` fails immediately, make sure `.venv` exists and you ran `npm install` inside [frontend](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend).
@@ -224,7 +233,7 @@ This repo includes [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics
 Set this environment variable in Netlify:
 
 ```bash
-VITE_API_BASE_URL=https://your-render-service.onrender.com
+VITE_API_BASE_URL=https://loom-analytics.onrender.com
 ```
 
 Then connect the repo in Netlify and deploy. Netlify will build from `frontend/` and publish `frontend/dist`.
@@ -236,13 +245,13 @@ This repo includes [render.yaml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%
 Set this environment variable in Render:
 
 ```bash
-APP_CORS_ORIGINS=https://your-netlify-site.netlify.app
+APP_CORS_ORIGINS=https://loom-analytics.netlify.app
 ```
 
 Optional:
 
 ```bash
-APP_CORS_ORIGIN_REGEX=https://.*--your-netlify-site.netlify.app
+APP_CORS_ORIGIN_REGEX=https://.*--loom-analytics.netlify.app
 ```
 
 Use the regex only if you also want Netlify preview deploys to talk to the backend.
@@ -255,7 +264,7 @@ Use the regex only if you also want Netlify preview deploys to talk to the backe
 4. Wait for the backend health check at `/api/health` to pass
 5. In Netlify, import the same repo
 6. Keep the repo-root [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/netlify.toml) settings
-7. Set `VITE_API_BASE_URL=https://your-render-service.onrender.com`
+7. Set `VITE_API_BASE_URL=https://loom-analytics.onrender.com`
 8. Deploy the frontend
 9. If Netlify gives you a different final site URL than expected, update `APP_CORS_ORIGINS` in Render and redeploy once
 

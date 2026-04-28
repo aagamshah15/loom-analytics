@@ -325,6 +325,49 @@ def workflow_overview(kind: str, analysis: dict[str, Any]) -> dict[str, Any]:
         }
     if kind == "healthcare_medical":
         summary = analysis["summary"]
+        profile = analysis.get("profile", "outcomes")
+        if profile == "claims_fraud":
+            return {
+                "title": "Healthcare claims dataset detected",
+                "blurb": (
+                    "This looks like healthcare claims and fraud-review data, so Loom is surfacing provider, payer, "
+                    "diagnosis, billing, and claim-control patterns."
+                ),
+                "metrics": [
+                    ("Claims", f"{summary['claim_count']:,}"),
+                    ("Fraud Rate", f"{summary['fraud_rate']:.1f}%"),
+                    ("Providers", f"{summary['provider_count']:,}"),
+                    ("Avg Claim", f"${summary['avg_claim_amount']:,.0f}"),
+                ],
+            }
+        if profile == "admissions":
+            return {
+                "title": "Healthcare admissions dataset detected",
+                "blurb": (
+                    "This looks like hospital admissions data, so Loom is surfacing utilization, diagnosis, billing, "
+                    "and payer-mix patterns."
+                ),
+                "metrics": [
+                    ("Patients", f"{summary['patient_count']:,}"),
+                    ("Avg LOS", f"{summary['avg_length_of_stay']:.1f} days"),
+                    ("Avg Billing", f"${summary['avg_billing']:,.0f}"),
+                    ("Top Condition", summary["top_condition"]),
+                ],
+            }
+        if profile == "insurance_risk":
+            return {
+                "title": "Healthcare insurance-risk dataset detected",
+                "blurb": (
+                    "This looks like insurance-risk and pricing data, so Loom is surfacing risk-factor, demographic, "
+                    "and charge concentration patterns."
+                ),
+                "metrics": [
+                    ("Members", f"{summary['member_count']:,}"),
+                    ("Avg Charges", f"${summary['avg_charges']:,.0f}"),
+                    ("Smoker Multiplier", f"{summary['smoker_multiplier']:.1f}x"),
+                    ("Age Correlation", f"{summary['age_charge_corr']:.2f}"),
+                ],
+            }
         return {
             "title": "Healthcare dataset detected",
             "blurb": (

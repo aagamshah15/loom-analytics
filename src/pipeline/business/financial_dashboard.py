@@ -16,7 +16,7 @@ REQUIRED_COLUMN_ALIASES = {
     "open": ["open"],
     "high": ["high"],
     "low": ["low"],
-    "close": ["close", "adj close", "adjusted close"],
+    "close": ["close", "close/last", "close last", "last", "adj close", "adjusted close"],
     "volume": ["volume"],
 }
 
@@ -86,21 +86,21 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
     working = pd.DataFrame(
         {
             "date": pd.to_datetime(df[detected["required"]["date"]], errors="coerce"),
-            "open": pd.to_numeric(df[detected["required"]["open"]], errors="coerce"),
-            "high": pd.to_numeric(df[detected["required"]["high"]], errors="coerce"),
-            "low": pd.to_numeric(df[detected["required"]["low"]], errors="coerce"),
-            "close": pd.to_numeric(df[detected["required"]["close"]], errors="coerce"),
-            "volume": pd.to_numeric(df[detected["required"]["volume"]], errors="coerce"),
+            "open": _coerce_numeric_series(df[detected["required"]["open"]]),
+            "high": _coerce_numeric_series(df[detected["required"]["high"]]),
+            "low": _coerce_numeric_series(df[detected["required"]["low"]]),
+            "close": _coerce_numeric_series(df[detected["required"]["close"]]),
+            "volume": _coerce_numeric_series(df[detected["required"]["volume"]]),
         }
     )
 
     if detected["optional"].get("dividends"):
-        working["dividends"] = pd.to_numeric(df[detected["optional"]["dividends"]], errors="coerce").fillna(0.0)
+        working["dividends"] = _coerce_numeric_series(df[detected["optional"]["dividends"]]).fillna(0.0)
     else:
         working["dividends"] = 0.0
 
     if detected["optional"].get("stock_splits"):
-        working["stock_splits"] = pd.to_numeric(df[detected["optional"]["stock_splits"]], errors="coerce").fillna(0.0)
+        working["stock_splits"] = _coerce_numeric_series(df[detected["optional"]["stock_splits"]]).fillna(0.0)
     else:
         working["stock_splits"] = 0.0
 
@@ -560,6 +560,18 @@ def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms
 
 def dashboard_section_options() -> dict[str, str]:
     return SECTION_CONFIG
+
+
+def _coerce_numeric_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    cleaned = (
+        series.astype(str)
+        .str.strip()
+        .str.replace(r"[$,%]", "", regex=True)
+        .str.replace(",", "", regex=False)
+    )
+    return pd.to_numeric(cleaned, errors="coerce")
 
 
 def _detect_financial_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:

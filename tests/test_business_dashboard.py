@@ -210,6 +210,30 @@ class BusinessDashboardTests(unittest.TestCase):
         self.assertIsNotNone(encoded_dashboard)
         self.assertIn("blueprint", encoded_dashboard)
 
+    def test_financial_detector_supports_market_export_currency_strings(self) -> None:
+        dates = pd.date_range("2020-01-02", periods=24, freq="B")
+        df = pd.DataFrame(
+            {
+                "Date": [date.strftime("%m/%d/%Y") for date in dates],
+                " Close/Last": [f"${150 + index * 1.7:.2f}" for index in range(24)],
+                " Volume": [100_000_000 + index * 1_250_000 for index in range(24)],
+                " Open": [f"${148 + index * 1.5:.2f}" for index in range(24)],
+                " High": [f"${153 + index * 1.8:.2f}" for index in range(24)],
+                " Low": [f"${146 + index * 1.4:.2f}" for index in range(24)],
+            }
+        )
+
+        context = PipelineContext(clean_df=df)
+        detected = detect_business_context(context)
+
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "financial_timeseries")
+
+        analysis = analyze_financial_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["column_map"]["required"]["close"], " Close/Last")
+        self.assertGreater(analysis["summary"]["latest_close"], analysis["summary"]["start_close"])
+
     def test_extract_focus_tags_is_deterministic(self) -> None:
         tags = extract_focus_tags("Look at dividend behavior, volume spikes, and long-term growth.")
         self.assertEqual(tags, ["growth", "volume", "dividends"])
@@ -609,6 +633,73 @@ class BusinessDashboardTests(unittest.TestCase):
         self.assertIn("blueprint", dashboard)
         self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
         self.assertEqual(dashboard["blueprint"]["layout_sections"][1]["id"], "risk_factors")
+
+    def test_build_healthcare_dashboard_for_claims_fraud_data(self) -> None:
+        rows = []
+        specialties = ["Cardiology", "General Practice", "Orthopedics", "Neurology"]
+        insurers = ["Medicare", "Medicaid", "Private", "Self-Pay"]
+        statuses = ["Approved", "Rejected", "Pending", "Approved"]
+        visits = ["Outpatient", "Emergency", "Inpatient"]
+        diagnoses = ["I10", "E11.9", "M54.5", "J06.9"]
+        for index in range(32):
+            is_fraud = 1 if index % 7 == 0 or (index % 11 == 0 and index > 0) else 0
+            claim_amount = 300 + (index % 9) * 80 + (500 if is_fraud else 0)
+            rows.append(
+                {
+                    "Provider_ID": f"P{index % 6:04d}",
+                    "Claim_ID": f"C{index:05d}",
+                    "Patient_Age": 30 + (index % 45),
+                    "Patient_Gender": "Female" if index % 2 else "Male",
+                    "Diagnosis_Code": diagnoses[index % len(diagnoses)],
+                    "Procedure_Code": str(90000 + index % 5),
+                    "Claim_Amount": claim_amount,
+                    "Approved_Amount": claim_amount * (0.78 if statuses[index % len(statuses)] == "Rejected" else 0.9),
+                    "Insurance_Type": insurers[index % len(insurers)],
+                    "Claim_Submission_Date": pd.Timestamp("2024-01-01") + pd.Timedelta(days=index),
+                    "Days_Between_Service_and_Claim": 3 + index % 25,
+                    "Number_of_Claims_Per_Provider_Monthly": 20 + index % 12,
+                    "Provider_Specialty": specialties[index % len(specialties)],
+                    "Patient_State": ["NY", "CA", "TX", "IL"][index % 4],
+                    "Claim_Status": statuses[index % len(statuses)],
+                    "Is_Fraud": is_fraud,
+                    "Length_of_Stay": index % 6,
+                    "Visit_Type": visits[index % len(visits)],
+                    "Chronic_Condition_Flag": 1 if index % 3 == 0 else 0,
+                    "Prior_Visits_12m": index % 8,
+                }
+            )
+
+        context = PipelineContext(clean_df=pd.DataFrame(rows))
+        detected = detect_business_context(context)
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "healthcare_medical")
+
+        analysis = analyze_healthcare_context(context)
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["profile"], "claims_fraud")
+
+        insights = build_healthcare_insight_candidates(analysis, "focus on provider fraud and claim billing")
+        insight_ids = {item["id"] for item in insights["insights"]}
+        self.assertIn("claims_fraud_baseline", insight_ids)
+        self.assertIn("specialty_fraud_concentration", insight_ids)
+
+        dashboard = build_healthcare_dashboard(
+            analysis=analysis,
+            approved_insight_ids=list(insight_ids)[:4],
+            user_prompt="focus on provider fraud and claim billing",
+            settings={
+                "title": "Claims Control Dashboard",
+                "subtitle": "Approved fraud and claims insights",
+                "included_sections": ["overview", "fraud", "providers", "billing", "utilization", "notes"],
+                "metric_count": 4,
+                "show_notes": True,
+            },
+        )
+
+        self.assertIsNotNone(dashboard)
+        self.assertEqual(dashboard["kind"], "healthcare_medical")
+        self.assertEqual(dashboard["blueprint"]["layout_sections"][1]["id"], "fraud")
+        self.assertIn("Claims Control Dashboard", dashboard["html"])
 
     def test_build_marketing_dashboard_for_campaign_data(self) -> None:
         df = pd.DataFrame(
