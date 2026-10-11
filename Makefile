@@ -52,10 +52,10 @@ triage-csvs:
 	@python3 scripts/triage_csvs.py $(ROOT)
 
 corpus-list:
-	@python3 scripts/corpus_fetch.py
+	@python3 -I scripts/corpus_fetch.py
 
 corpus-fetch:
-	@python3 scripts/corpus_fetch.py --yes
+	@python3 -I scripts/corpus_fetch.py --yes
 
 corpus-eval:
-	@python3 scripts/corpus_eval.py $(ARGS)
+	@python3 -I scripts/corpus_eval.py $(ARGS)

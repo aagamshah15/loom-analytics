@@ -18,9 +18,10 @@ from typing import Any, Optional
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+# Added explicitly so the script also runs under `python -I`, which is how corpus files should be read.
+for import_root in (PROJECT_ROOT / "src", PROJECT_ROOT / "scripts"):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
 from fastapi.testclient import TestClient
 
@@ -232,6 +233,8 @@ def evaluate_file(client: TestClient, target: dict[str, Any]) -> dict[str, Any]:
         result["profile"] = business_context["analysis"].get("profile")
         result["insights"] = len(insights)
         approved = [item["id"] for item in insights if item.get("recommended")] or [item["id"] for item in insights[:4]]
+        # Same defaults the React app sends: recommended insights approved, overview plus every insight's section.
+        included_sections = list(dict.fromkeys(["overview", *[item["section"] for item in insights]]))
 
         started = time.perf_counter()
         try:
@@ -241,7 +244,7 @@ def evaluate_file(client: TestClient, target: dict[str, Any]) -> dict[str, Any]:
                     "kind": business_context["kind"],
                     "analysis": business_context["analysis"],
                     "approved_insight_ids": approved,
-                    "settings": {},
+                    "settings": {"included_sections": included_sections, "metric_count": 4, "show_notes": True},
                 },
             )
         except Exception:
