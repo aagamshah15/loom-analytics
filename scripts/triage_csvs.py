@@ -62,7 +62,7 @@ def _triage_file(path: Path) -> dict[str, Any]:
         row["pipeline_warnings"] = len(context.warnings)
         if context.errors:
             row["status"] = "fail"
-            row["issue"] = "; ".join(context.errors)
+            row["issue"] = "; ".join(error["message"] for error in context.errors)
             return row
 
         detected = detect_business_context(context)

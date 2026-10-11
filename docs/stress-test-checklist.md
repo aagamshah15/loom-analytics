@@ -32,7 +32,7 @@ Use this checklist before major deploys and after any workflow, template, or das
 2. Run `make health`
 3. Run `make test`
 4. Run `make test-templates`
-4. Run `make test-ui`
+5. Run `make test-ui`
 
 ## Hosted Smoke
 

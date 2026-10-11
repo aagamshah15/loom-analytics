@@ -27,7 +27,7 @@ test("core Loom journey reaches preview and exports HTML", async ({ page }) => {
   await page.getByTestId("continue-to-review-button").click();
 
   await expect(page.getByTestId("review-screen")).toBeVisible();
-  await expect(page.getByTestId("insight-card-discount_paradox")).toBeVisible();
+  await expect(page.getByTestId("insight-card-clothing_return_bomb")).toBeVisible();
 
   await page.getByTestId("reject-all-button").click();
   await expect(page.getByTestId("build-dashboard-button")).toBeDisabled();
@@ -36,8 +36,8 @@ test("core Loom journey reaches preview and exports HTML", async ({ page }) => {
 
   await page.getByTestId("review-prompt-input").fill("focus on discounts and returns");
   await page.getByTestId("apply-instructions-button").click();
-  await expect(page.getByText("discounts")).toBeVisible();
-  await expect(page.getByText("returns")).toBeVisible();
+  await expect(page.getByText("discounts", { exact: true })).toBeVisible();
+  await expect(page.getByText("returns", { exact: true })).toBeVisible();
 
   await page.getByTestId("build-dashboard-button").click();
   await expect(page.getByTestId("builder-screen")).toBeVisible();
@@ -67,7 +67,8 @@ test("landing nav surfaces template catalog and docs content", async ({ page }) 
   await expect(page.getByTestId("templates-section")).toBeInViewport();
   await expect(page.getByText("Financial Time Series")).toBeVisible();
   await expect(page.getByText("HR / Workforce")).toBeVisible();
-  await expect(page.getByText("Coming soon")).toHaveCount(3);
+  await expect(page.getByText("7 ready now")).toBeVisible();
+  await expect(page.getByText("Coming soon")).toHaveCount(0);
 
   await page.getByTestId("landing-nav-docs").click();
   await expect(page.getByTestId("docs-section")).toBeInViewport();
@@ -97,11 +98,25 @@ test("invalid upload shows readable 400 error", async ({ page }) => {
   await page.getByTestId("csv-file-input").setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
-    buffer: new TextEncoder().encode("not a csv"),
+    buffer: Buffer.from("not a csv"),
   });
   await page.getByTestId("analyze-csv-button").click();
 
-  await expect(page.getByTestId("app-error-banner")).toContainText("Please upload a CSV file.");
+  await expect(page.getByTestId("app-error-banner")).toHaveText("Please upload a CSV file.");
+  await expect(page.getByTestId("landing-screen")).toBeVisible();
+});
+
+test("unreadable CSV shows the pipeline's own message", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("csv-file-input").setInputFiles({
+    name: "header-only.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("order_date,order_value,category\n"),
+  });
+  await page.getByTestId("analyze-csv-button").click();
+
+  await expect(page.getByTestId("app-error-banner")).toHaveText("File contains no data rows.");
   await expect(page.getByTestId("landing-screen")).toBeVisible();
 });
 

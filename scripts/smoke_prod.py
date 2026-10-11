@@ -35,7 +35,8 @@ SECTION_MAP = {
     "financial_timeseries": ["overview", "seasonality", "volatility", "gaps", "volume", "data_notes"],
     "ecommerce_orders": ["overview", "revenue", "returns", "channels", "discounts", "notes"],
     "healthcare_medical": ["overview", "adherence", "care_delivery", "equity", "costs", "notes"],
-    "marketing_campaign": ["overview", "allocation", "experiments", "audience", "digital_experience", "notes"],
+    # marketing/happy_path.csv is the CRM profile.
+    "marketing_campaign": ["overview", "offers", "customers", "segments", "retention", "notes"],
     "hr_workforce": ["overview", "retention", "compensation", "development", "workforce_model", "notes"],
     "survey_sentiment": ["overview", "stakeholders", "onboarding", "effort", "product", "renewal", "notes"],
     "web_app_analytics": ["overview", "devices", "channels", "campaigns", "content", "retention", "notes"],
@@ -78,7 +79,8 @@ def main() -> int:
             },
         )
         assert_true(bool(dashboard.get("html")), f"{kind} should return HTML")
-        assert_true(bool(dashboard.get("blueprint", {}).get("layout_sections")), f"{kind} should return layout sections")
+        returned_sections = [section["id"] for section in dashboard.get("blueprint", {}).get("layout_sections", [])]
+        assert_equal(returned_sections, SECTION_MAP[kind], f"{kind} should return every requested section")
         print(f"    ok analyze + build for {kind}")
 
     print("Hosted smoke checks passed.")

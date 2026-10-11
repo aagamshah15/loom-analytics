@@ -18,11 +18,11 @@ Production API: [https://loom-analytics.onrender.com](https://loom-analytics.onr
 - Streamlit prototype for quick iteration
 - React/Vite frontend for the proper product UI
 - FastAPI API for file upload, template detection, insight review, and dashboard generation
-- Specialized business templates for financial time-series, e-commerce, healthcare, and HR/workforce data
+- Specialized business templates for financial time-series, e-commerce, healthcare, marketing, HR/workforce, survey/sentiment, and web/app analytics data
 - CLI artifacts when persistence is enabled:
-- `report.json`
-- `summary.md`
-- `summary.html`
+  - `report.json`
+  - `summary.md`
+  - `summary.html`
   - `charts/*.png`
 - YAML-driven cleaning configuration
 - Fixture-backed tests for ingestion, validation, cleaning, analysis, and end-to-end execution
@@ -82,7 +82,7 @@ make frontend
 
 The React app proxies API requests to the FastAPI backend on port `8000`.
 
-If you want the frontend to call a non-local backend directly, create [frontend/.env.example](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend/.env.example) as `frontend/.env.local` and set `VITE_API_BASE_URL`.
+If you want the frontend to call a non-local backend directly, create [frontend/.env.example](frontend/.env.example) as `frontend/.env.local` and set `VITE_API_BASE_URL`.
 
 Run the CLI pipeline directly:
 
@@ -205,11 +205,11 @@ LOOM_FRONTEND_URL=https://loom-analytics.netlify.app LOOM_BACKEND_URL=https://lo
 
 ## Troubleshooting
 
-- If `make dev` fails immediately, make sure `.venv` exists and you ran `npm install` inside [frontend](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend).
-- If the React app does not start, make sure you ran `npm install` inside [frontend](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend) first.
-- If file uploads fail in the API, make sure your active Python environment has the packages from [requirements.txt](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/requirements.txt), including `fastapi`, `uvicorn`, and `python-multipart`.
+- If `make dev` fails immediately, make sure `.venv` exists and you ran `npm install` inside [frontend](frontend).
+- If the React app does not start, make sure you ran `npm install` inside [frontend](frontend) first.
+- If file uploads fail in the API, make sure your active Python environment has the packages from [requirements.txt](requirements.txt), including `fastapi`, `uvicorn`, and `python-multipart`.
 - If the frontend loads but API calls fail, confirm the FastAPI server is running on `http://127.0.0.1:8000`.
-- If you want to change local ports, set `API_PORT`, `API_HOST`, `FRONTEND_PORT`, or `FRONTEND_HOST` before running [dev.sh](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/scripts/dev.sh).
+- If you want to change local ports, set `API_PORT`, `API_HOST`, `FRONTEND_PORT`, or `FRONTEND_HOST` before running [dev.sh](scripts/dev.sh).
 - If the frontend is hosted separately, make sure `VITE_API_BASE_URL` points at the deployed backend and the backend allows that frontend origin through `APP_CORS_ORIGINS`.
 
 ## Deployment
@@ -228,7 +228,7 @@ Recommended order:
 
 ### Netlify frontend
 
-This repo includes [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/netlify.toml), so Netlify can build the frontend from the repo root without extra manual build settings.
+This repo includes [netlify.toml](netlify.toml), so Netlify can build the frontend from the repo root without extra manual build settings.
 
 Set this environment variable in Netlify:
 
@@ -240,7 +240,7 @@ Then connect the repo in Netlify and deploy. Netlify will build from `frontend/`
 
 ### Render backend
 
-This repo includes [render.yaml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/render.yaml) for the FastAPI service.
+This repo includes [render.yaml](render.yaml) for the FastAPI service.
 
 Set this environment variable in Render:
 
@@ -259,11 +259,11 @@ Use the regex only if you also want Netlify preview deploys to talk to the backe
 ### Fast path
 
 1. In Render, create a new Blueprint or Web Service from [loom-analytics](https://github.com/aagamshah15/loom-analytics)
-2. Approve the settings from [render.yaml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/render.yaml)
+2. Approve the settings from [render.yaml](render.yaml)
 3. Set `APP_CORS_ORIGINS` temporarily to your expected Netlify site URL, or update it right after Netlify gives you the final URL
 4. Wait for the backend health check at `/api/health` to pass
 5. In Netlify, import the same repo
-6. Keep the repo-root [netlify.toml](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/netlify.toml) settings
+6. Keep the repo-root [netlify.toml](netlify.toml) settings
 7. Set `VITE_API_BASE_URL=https://loom-analytics.onrender.com`
 8. Deploy the frontend
 9. If Netlify gives you a different final site URL than expected, update `APP_CORS_ORIGINS` in Render and redeploy once
@@ -276,9 +276,9 @@ Use the regex only if you also want Netlify preview deploys to talk to the backe
 
 ## Product UI Layers
 
-The proper product frontend lives under [frontend](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/frontend) and talks to the FastAPI app in [app.py](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/src/pipeline/api/app.py).
+The proper product frontend lives under [frontend](frontend) and talks to the FastAPI app in [app.py](src/pipeline/api/app.py).
 
-The Streamlit prototype lives in [app.py](/Users/aagam/Codex%20Challenge/CSV%20Analytics%20Pipeline/src/pipeline/ui/app.py) and remains useful for rapid iteration or fallback demos.
+The Streamlit prototype lives in [app.py](src/pipeline/ui/app.py) and remains useful for rapid iteration or fallback demos.
 
 Current React workflow:
 
@@ -298,6 +298,7 @@ Current React workflow:
 - CLI-first MVP is implemented and remains the source of truth for data processing
 - Streamlit remains the prototype shell
 - React/Vite + FastAPI is now the proper frontend direction
-- The business layer currently includes financial and e-commerce specialized templates
+- The business layer includes seven specialized templates: financial time-series, e-commerce, healthcare, marketing, HR/workforce, survey/sentiment, and web/app analytics
+- A CSV that matches none of them currently ends at a "no specialized template" screen without a dashboard
 - Rule-based deterministic insights are implemented now
 - LLM narration and predictive models remain post-MVP
