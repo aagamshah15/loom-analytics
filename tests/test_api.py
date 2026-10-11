@@ -455,6 +455,25 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("<script>alert(1)</script>", html)
         self.assertNotIn("<img src=x", html)
 
+    def test_single_valued_column_does_not_hide_the_template(self) -> None:
+        pages = ["Home", "Blog", "Pricing"]
+        rows = ["device,channel,page,sessions,conversions,bounce_rate,load_time"]
+        for idx in range(36):
+            rows.append(
+                f"{'Mobile' if idx % 2 else 'Desktop'},Social,{pages[idx % 3]},"
+                f"{200 + idx},{10 + idx % 7},{40 + idx % 9},{2.0 + idx % 3}"
+            )
+
+        response = self.client.post(
+            "/api/analyze",
+            files={"file": ("one-channel.csv", io.BytesIO("\n".join(rows).encode("utf-8")), "text/csv")},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("Column channel dropped: zero variance.", payload["report"]["warnings"])
+        self.assertEqual(payload["business_context"]["kind"], "web_app_analytics")
+        self.assertEqual(payload["business_context"]["analysis"]["signals"]["channel_conversion_rate"]["labels"], ["social"])
+
 
 if __name__ == "__main__":
     unittest.main()

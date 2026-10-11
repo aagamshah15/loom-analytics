@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, script_json
+from pipeline.business.common import collect_insights, html_template, script_json, template_frame
 from pipeline.common.contracts import PipelineContext
 
 
@@ -141,7 +141,7 @@ DEAL_SECTION_CONFIG = {
 
 
 def analyze_marketing_context(context: PipelineContext) -> Optional[dict[str, Any]]:
-    df = context.clean_df if context.clean_df is not None else context.raw_df
+    df = template_frame(context)
     if df is None or df.empty:
         return None
 

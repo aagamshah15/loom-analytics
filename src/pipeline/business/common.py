@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Iterable, Optional
 
+import pandas as pd
 from jinja2 import Environment, Template
 from markupsafe import Markup
+
+from pipeline.common.contracts import PipelineContext
 
 _HTML_ENV = Environment(autoescape=True)
 
@@ -45,3 +48,15 @@ def script_json(value: Any, *, default: Optional[Callable[[Any], Any]] = None) -
     """
     text = json.dumps(value, default=default)
     return Markup(text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
+
+
+def template_frame(context: PipelineContext) -> Optional[pd.DataFrame]:
+    """The dataframe a business template should read.
+
+    Prefers the cleaned data with constant columns restored, then the cleaned
+    data, then the raw upload.
+    """
+    for frame in (context.template_df, context.clean_df, context.raw_df):
+        if frame is not None:
+            return frame
+    return None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import pandas as pd
 
 from pipeline.common.config import PipelineConfig
@@ -54,10 +56,12 @@ def run_cleaning(context: PipelineContext, config: PipelineConfig) -> None:
                 context.log_transform(action="dropped_fully_missing_column", column=column, rows_affected=len(context.raw_df))
                 context.add_warning(f"Column {column} dropped: 100% missing.")
 
+    constant_columns: dict[object, object] = {}
     if config.cleaning.always_drop_zero_variance_columns:
         for column in list(df.columns):
             non_null = df[column].dropna()
             if not non_null.empty and non_null.nunique() <= 1:
+                constant_columns[column] = non_null.iloc[0]
                 df = df.drop(columns=[column])
                 context.log_transform(action="dropped_zero_variance_column", column=column, rows_affected=len(non_null))
                 context.add_warning(f"Column {column} dropped: zero variance.")
@@ -101,6 +105,25 @@ def run_cleaning(context: PipelineContext, config: PipelineConfig) -> None:
             context.log_transform(action="dropped_duplicates", rows_affected=duplicates_count)
 
     context.clean_df = df
+    context.template_df = _restore_constant_columns(df, constant_columns, list(context.raw_df.columns))
+
+
+def _restore_constant_columns(
+    df: pd.DataFrame,
+    constant_columns: dict[object, object],
+    original_order: list[object],
+) -> Optional[pd.DataFrame]:
+    """Zero-variance columns are noise for statistics, but a business template may still need them.
+
+    A single-channel or single-device export is a legitimate dataset; without the
+    column the template cannot recognize it.
+    """
+    if not constant_columns:
+        return None
+    restored = df.copy()
+    for column, value in constant_columns.items():
+        restored[column] = value
+    return restored[[column for column in original_order if column in restored.columns]]
 
 
 def _is_string_like(series: pd.Series) -> bool:
