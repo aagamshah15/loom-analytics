@@ -1,0 +1,1000 @@
+# Loom detection corpus.
+#
+# Real-world CSVs used to measure template detection and dashboard output. The
+# files themselves are not checked in: scripts/corpus_fetch.py downloads them
+# into a local folder, and scripts/corpus_eval.py scores Loom against the
+# `expected` labels below.
+#
+# expected  the template a reasonable user would expect, `generic` when none
+#           applies, or a list when more than one answer is acceptable.
+# notes     what makes the file's shape interesting.
+#
+# Labels were assigned from knowledge of each dataset and have not been checked
+# against the downloaded headers yet. Fix any that the scorecard shows are wrong.
+
+entries:
+
+  - id: fin-mpl-sp500-nov2019
+    source: url
+    ref: https://raw.githubusercontent.com/matplotlib/mplfinance/master/examples/data/SP500_NOV2019_Hist.csv
+    size_bytes: 1097
+    expected: financial_timeseries
+    notes: "Date, OHLC, Volume; one month of daily bars"
+
+  - id: fin-yahoo-spy-2008-2018
+    source: url
+    ref: https://raw.githubusercontent.com/matplotlib/mplfinance/master/examples/data/yahoofinance-SPY-20080101-20180101.csv
+    size_bytes: 189400
+    expected: financial_timeseries
+    notes: "Yahoo Finance export with Adj Close"
+
+  - id: fin-yahoo-goog-2004-2018
+    source: url
+    ref: https://raw.githubusercontent.com/matplotlib/mplfinance/master/examples/data/yahoofinance-GOOG-20040819-20180120.csv
+    size_bytes: 250345
+    expected: financial_timeseries
+    notes: "Yahoo Finance export with Adj Close"
+
+  - id: fin-yahoo-intc-1995-2004
+    source: url
+    ref: https://raw.githubusercontent.com/matplotlib/mplfinance/master/examples/data/yahoofinance-INTC-19950101-20040412.csv
+    size_bytes: 161639
+    expected: financial_timeseries
+    notes: "Yahoo Finance export with Adj Close"
+
+  - id: fin-mpl-spy-bollinger
+    source: url
+    ref: https://raw.githubusercontent.com/matplotlib/mplfinance/master/examples/data/SPY_20110701_20120630_Bollinger.csv
+    size_bytes: 35001
+    expected: financial_timeseries
+    notes: "OHLCV plus indicator columns"
+
+  - id: fin-plotly-apple
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv
+    size_bytes: 60220
+    expected: financial_timeseries
+    notes: "OHLCV with ticker-prefixed column names (AAPL.Open ...)"
+
+  - id: fin-plotly-tesla
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/tesla-stock-price.csv
+    size_bytes: 55371
+    expected: financial_timeseries
+    notes: "lowercase date, close, volume, open, high, low"
+
+  - id: fin-openintro-sp500-1950-2018
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/sp500_1950_2018.csv
+    size_bytes: 1343867
+    expected: financial_timeseries
+    notes: "OHLCV with Adj.Close and a leading row-index column"
+
+  - id: fin-datasets-vix-daily
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/finance-vix/main/data/vix-daily.csv
+    size_bytes: 482200
+    expected: financial_timeseries
+    notes: "uppercase DATE, OPEN, HIGH, LOW, CLOSE; no volume"
+
+  - id: fin-plotly-stockdata-wide
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/stockdata.csv
+    size_bytes: 151626
+    expected: [financial_timeseries, generic]
+    notes: "one close-price column per ticker"
+
+  - id: fin-vega-stocks-long
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/stocks.csv
+    size_bytes: 12245
+    expected: [financial_timeseries, generic]
+    notes: "long format: symbol, date, price"
+
+  - id: fin-vega-sp500-price
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/sp500.csv
+    size_bytes: 2305
+    expected: [financial_timeseries, generic]
+    notes: "date and price only"
+
+  - id: fin-datasets-sp500-monthly
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv
+    size_bytes: 123851
+    expected: [financial_timeseries, generic]
+    notes: "monthly index level with dividends, earnings, CPI"
+
+  - id: fin-datasets-brent-daily
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/oil-prices/main/data/brent-daily.csv
+    size_bytes: 163512
+    expected: [financial_timeseries, generic]
+    notes: "date and price only"
+
+  - id: fin-datasets-gold-monthly
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv
+    size_bytes: 35730
+    expected: [financial_timeseries, generic]
+    notes: "date and price only"
+
+  - id: fin-seaborn-dowjones
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/dowjones.csv
+    size_bytes: 11349
+    expected: [financial_timeseries, generic]
+    notes: "date and price only"
+
+  - id: fin-islr-smarket
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/ISLR/Smarket.csv
+    size_bytes: 73120
+    expected: generic
+    notes: "daily returns and lags, no prices or dates"
+
+  - id: fin-eustockmarkets
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/EuStockMarkets.csv
+    size_bytes: 60865
+    expected: generic
+    notes: "four index levels, no date column"
+
+  - id: hr-ibm-attrition
+    source: url
+    ref: https://raw.githubusercontent.com/IBM/employee-attrition-aif360/master/data/emp_attrition.csv
+    size_bytes: 227977
+    expected: hr_workforce
+    notes: "IBM HR attrition; same shape the detector was tuned on"
+
+  - id: hr-modeldata-attrition
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/attrition.csv
+    size_bytes: 269147
+    expected: hr_workforce
+    notes: "IBM HR attrition with text levels (Low/High) instead of numeric scores"
+
+  - id: hr-cardata-salaries
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/carData/Salaries.csv
+    size_bytes: 11772
+    expected: [hr_workforce, generic]
+    notes: "professor salaries by rank, discipline, sex; no attrition"
+
+  - id: hr-wooldridge-wage1
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/wooldridge/wage1.csv
+    size_bytes: 43391
+    expected: [hr_workforce, generic]
+    notes: "wages with tenure, education, gender flags"
+
+  - id: hr-islr-wage
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/ISLR/Wage.csv
+    size_bytes: 417485
+    expected: [hr_workforce, generic]
+    notes: "wages by age, education, job class"
+
+  - id: hr-wooldridge-ceosal1
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/wooldridge/ceosal1.csv
+    size_bytes: 21674
+    expected: generic
+    notes: "CEO pay vs firm performance"
+
+  - id: hr-openintro-resume
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/resume.csv
+    size_bytes: 627632
+    expected: generic
+    notes: "hiring callback experiment"
+
+  - id: hc-stedy-insurance
+    source: url
+    ref: https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv
+    size_bytes: 54288
+    expected: healthcare_medical
+    notes: "medical cost insurance; same shape the detector was tuned on"
+
+  - id: hc-medicaldata-covid-testing
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/medicaldata/covid_testing.csv
+    size_bytes: 1584563
+    expected: healthcare_medical
+    notes: "patient-level tests with clinic, payor group, turnaround times"
+
+  - id: hc-count-medpar
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/COUNT/medpar.csv
+    size_bytes: 44426
+    expected: [healthcare_medical, generic]
+    notes: "hospital stays: length of stay, died, admission type"
+
+  - id: hc-count-azpro
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/COUNT/azpro.csv
+    size_bytes: 99355
+    expected: [healthcare_medical, generic]
+    notes: "hospital stays: length of stay, procedure, admit type"
+
+  - id: hc-aer-doctorvisits
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/AER/DoctorVisits.csv
+    size_bytes: 232590
+    expected: [healthcare_medical, generic]
+    notes: "doctor visits with illness, insurance flags"
+
+  - id: hc-aer-nmes1988
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/AER/NMES1988.csv
+    size_bytes: 339929
+    expected: [healthcare_medical, generic]
+    notes: "medical expenditure survey: visits, chronic conditions, insurance"
+
+  - id: hc-aer-healthinsurance
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/AER/HealthInsurance.csv
+    size_bytes: 478327
+    expected: [healthcare_medical, generic]
+    notes: "health status and insurance coverage"
+
+  - id: hc-modeldata-ischemic-stroke
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/ischemic_stroke.csv
+    size_bytes: 31956
+    expected: [healthcare_medical, generic]
+    notes: "clinical imaging features with stroke outcome"
+
+  - id: hc-openintro-births14
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/births14.csv
+    size_bytes: 84286
+    expected: [healthcare_medical, generic]
+    notes: "birth records"
+
+  - id: hc-openintro-heart-transplant
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/heart_transplant.csv
+    size_bytes: 3701
+    expected: [healthcare_medical, generic]
+    notes: "transplant survival study"
+
+  - id: hc-medicaldata-blood-storage
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/medicaldata/blood_storage.csv
+    size_bytes: 17529
+    expected: [healthcare_medical, generic]
+    notes: "prostate cancer cohort"
+
+  - id: hc-plotly-diabetes
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/diabetes.csv
+    size_bytes: 23873
+    expected: [healthcare_medical, generic]
+    notes: "Pima diabetes measurements"
+
+  - id: hc-modeldata-alzheimers
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/ad_data.csv
+    size_bytes: 799821
+    expected: [healthcare_medical, generic]
+    notes: "Alzheimer's biomarkers; file is named ad_data but is not advertising"
+
+  - id: hc-pima-headerless
+    source: url
+    ref: https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.data.csv
+    size_bytes: 23278
+    expected: generic
+    notes: "no header row"
+
+  - id: eco-islr-oj
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/ISLR/OJ.csv
+    size_bytes: 77021
+    expected: [ecommerce_orders, generic]
+    notes: "orange juice purchases with prices, discounts, store"
+
+  - id: eco-openintro-mariokart
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/mariokart.csv
+    size_bytes: 14266
+    expected: [ecommerce_orders, generic]
+    notes: "eBay auction listings with prices and shipping"
+
+  - id: eco-islr-carseats
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/ISLR/Carseats.csv
+    size_bytes: 18123
+    expected: generic
+    notes: "store-level sales, not orders"
+
+  - id: eco-modeldata-drinks
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/drinks.csv
+    size_bytes: 6167
+    expected: generic
+    notes: "monthly sales series: date and one value"
+
+  - id: eco-plotly-sales-success
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/sales_success.csv
+    size_bytes: 1253
+    expected: generic
+    notes: "tiny regional sales table"
+
+  - id: eco-plotly-walmart-openings
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/1962_2006_walmart_store_openings.csv
+    size_bytes: 317460
+    expected: generic
+    notes: "store openings with addresses and dates"
+
+  - id: mkt-selva-email-funnel
+    source: url
+    ref: https://raw.githubusercontent.com/selva86/datasets/master/email_campaign_funnel.csv
+    size_bytes: 2292
+    expected: [marketing_campaign, generic]
+    notes: "email campaign funnel stages"
+
+  - id: mkt-selva-advertising
+    source: url
+    ref: https://raw.githubusercontent.com/selva86/datasets/master/Advertising.csv
+    size_bytes: 4756
+    expected: [marketing_campaign, generic]
+    notes: "ad spend by channel vs sales"
+
+  - id: mkt-islr-caravan
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/ISLR/Caravan.csv
+    size_bytes: 1041013
+    expected: [marketing_campaign, generic]
+    notes: "insurance prospect profiles with purchase flag, 86 columns"
+
+  - id: srv-538-steak
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/steak-survey/steak-risk-survey.csv
+    size_bytes: 62660
+    expected: [survey_sentiment, generic]
+    notes: "question text as headers, second header row"
+
+  - id: srv-538-comma
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/comma-survey/comma-survey.csv
+    size_bytes: 275612
+    expected: [survey_sentiment, generic]
+    notes: "question text as headers"
+
+  - id: srv-538-starwars
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/star-wars-survey/StarWars.csv
+    size_bytes: 531696
+    expected: [survey_sentiment, generic]
+    notes: "two header rows, non-UTF-8 encoding"
+
+  - id: srv-538-thanksgiving
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/thanksgiving-2015/thanksgiving-2015-poll-data.csv
+    size_bytes: 385447
+    expected: [survey_sentiment, generic]
+    notes: "question text as headers"
+
+  - id: srv-538-masculinity
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/masculinity-survey/raw-responses.csv
+    size_bytes: 2258558
+    expected: [survey_sentiment, generic]
+    notes: "coded question ids, many columns"
+
+  - id: srv-538-flying-etiquette
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/flying-etiquette-survey/flying-etiquette.csv
+    size_bytes: 467284
+    expected: [survey_sentiment, generic]
+    notes: "question text as headers"
+
+  - id: srv-538-weather-check
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/weather-check/weather-check.csv
+    size_bytes: 101965
+    expected: [survey_sentiment, generic]
+    notes: "question text as headers"
+
+  - id: srv-538-food-world-cup
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/food-world-cup/food-world-cup-data.csv
+    size_bytes: 278461
+    expected: [survey_sentiment, generic]
+    notes: "rating grid, non-UTF-8 encoding"
+
+  - id: srv-openintro-ebola
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/ebola_survey.csv
+    size_bytes: 10751
+    expected: [survey_sentiment, generic]
+    notes: "single-question poll"
+
+  - id: srv-openintro-yrbss
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/yrbss.csv
+    size_bytes: 922544
+    expected: [survey_sentiment, generic]
+    notes: "youth risk behavior survey"
+
+  - id: srv-modeldata-stackoverflow
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/stackoverflow.csv
+    size_bytes: 422979
+    expected: [survey_sentiment, hr_workforce, generic]
+    notes: "developer survey with salary and satisfaction"
+
+  - id: gen-ibm-telco-churn
+    source: url
+    ref: https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/master/data/Telco-Customer-Churn.csv
+    size_bytes: 970457
+    expected: generic
+    notes: "telco churn"
+
+  - id: gen-modeldata-wa-churn
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/wa_churn.csv
+    size_bytes: 854772
+    expected: generic
+    notes: "telco churn"
+
+  - id: gen-modeldata-mlc-churn
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/mlc_churn.csv
+    size_bytes: 475220
+    expected: generic
+    notes: "telco churn"
+
+  - id: gen-seaborn-iris
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv
+    size_bytes: 3858
+    expected: generic
+
+  - id: gen-seaborn-titanic
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/titanic.csv
+    size_bytes: 57018
+    expected: generic
+    notes: "has sex and age columns"
+
+  - id: gen-seaborn-tips
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv
+    size_bytes: 9729
+    expected: generic
+    notes: "has sex and smoker columns"
+
+  - id: gen-seaborn-penguins
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv
+    size_bytes: 13478
+    expected: generic
+
+  - id: gen-seaborn-diamonds
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/diamonds.csv
+    size_bytes: 2772143
+    expected: generic
+    notes: "has a price column"
+
+  - id: gen-seaborn-mpg
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv
+    size_bytes: 21222
+    expected: generic
+
+  - id: gen-seaborn-flights
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/flights.csv
+    size_bytes: 2350
+    expected: generic
+
+  - id: gen-seaborn-planets
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/planets.csv
+    size_bytes: 36263
+    expected: generic
+
+  - id: gen-seaborn-taxis
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/taxis.csv
+    size_bytes: 869349
+    expected: generic
+    notes: "has payment and total columns"
+
+  - id: gen-seaborn-car-crashes
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/car_crashes.csv
+    size_bytes: 3301
+    expected: generic
+
+  - id: gen-seaborn-healthexp
+    source: url
+    ref: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/healthexp.csv
+    size_bytes: 7222
+    expected: generic
+    notes: "country health spending, not patients"
+
+  - id: gen-vega-seattle-weather
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/seattle-weather.csv
+    size_bytes: 48219
+    expected: generic
+
+  - id: gen-vega-airports
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv
+    size_bytes: 210363
+    expected: generic
+
+  - id: gen-vega-disasters
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/disasters.csv
+    size_bytes: 18840
+    expected: generic
+
+  - id: gen-vega-birdstrikes
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/birdstrikes.csv
+    size_bytes: 1223329
+    expected: generic
+    notes: "has cost columns"
+
+  - id: gen-vega-gapminder-health-income
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/gapminder-health-income.csv
+    size_bytes: 8605
+    expected: generic
+
+  - id: gen-vega-github-commits
+    source: url
+    ref: https://raw.githubusercontent.com/vega/vega-datasets/main/data/github.csv
+    size_bytes: 21059
+    expected: generic
+    notes: "time and count"
+
+  - id: gen-plotly-gapminder
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/gapminderDataFiveYear.csv
+    size_bytes: 82079
+    expected: generic
+
+  - id: gen-plotly-usa-states
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/2014_usa_states.csv
+    size_bytes: 1411
+    expected: generic
+
+  - id: gen-plotly-ag-exports
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/2011_us_ag_exports.csv
+    size_bytes: 5291
+    expected: generic
+
+  - id: gen-plotly-earthquakes
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/earthquakes-23k.csv
+    size_bytes: 833523
+    expected: generic
+
+  - id: gen-plotly-school-earnings
+    source: url
+    ref: https://raw.githubusercontent.com/plotly/datasets/master/school_earnings.csv
+    size_bytes: 380
+    expected: generic
+    notes: "21 rows"
+
+  - id: gen-datasets-gdp
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/gdp/main/data/gdp.csv
+    size_bytes: 562767
+    expected: generic
+
+  - id: gen-datasets-population
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/population/main/data/population.csv
+    size_bytes: 556718
+    expected: generic
+
+  - id: gen-datasets-covid-countries
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/covid-19/main/data/countries-aggregated.csv
+    size_bytes: 5512931
+    expected: generic
+    notes: "5.5 MB"
+
+  - id: gen-datasets-sp500-constituents
+    source: url
+    ref: https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv
+    size_bytes: 53632
+    expected: generic
+    notes: "company list, not prices"
+
+  - id: gen-brownlee-airline-passengers
+    source: url
+    ref: https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv
+    size_bytes: 2180
+    expected: generic
+    notes: "month and count"
+
+  - id: gen-brownlee-daily-min-temps
+    source: url
+    ref: https://raw.githubusercontent.com/jbrownlee/Datasets/master/daily-min-temperatures.csv
+    size_bytes: 67921
+    expected: generic
+    notes: "date and value"
+
+  - id: gen-brownlee-housing-headerless
+    source: url
+    ref: https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv
+    size_bytes: 41295
+    expected: generic
+    notes: "no header row, whitespace-delimited"
+
+  - id: gen-selva-boston-housing
+    source: url
+    ref: https://raw.githubusercontent.com/selva86/datasets/master/BostonHousing.csv
+    size_bytes: 35735
+    expected: generic
+
+  - id: gen-selva-economics
+    source: url
+    ref: https://raw.githubusercontent.com/selva86/datasets/master/economics.csv
+    size_bytes: 21860
+    expected: generic
+
+  - id: gen-538-recent-grads
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/recent-grads.csv
+    size_bytes: 26872
+    expected: generic
+
+  - id: gen-538-drinks
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/alcohol-consumption/drinks.csv
+    size_bytes: 4384
+    expected: generic
+
+  - id: gen-538-bechdel-movies
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/bechdel/movies.csv
+    size_bytes: 207689
+    expected: generic
+    notes: "has budget and gross columns"
+
+  - id: gen-538-airline-safety
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/airline-safety/airline-safety.csv
+    size_bytes: 2265
+    expected: generic
+
+  - id: gen-538-candy
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/candy-power-ranking/candy-data.csv
+    size_bytes: 5193
+    expected: generic
+
+  - id: gen-538-knyc-weather
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/us-weather-history/KNYC.csv
+    size_bytes: 20604
+    expected: generic
+
+  - id: gen-538-daily-show-guests
+    source: url
+    ref: https://raw.githubusercontent.com/fivethirtyeight/data/master/daily-show-guests/daily_show_guests.csv
+    size_bytes: 126723
+    expected: generic
+
+  - id: gen-modeldata-ames
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/ames.csv
+    size_bytes: 1284472
+    expected: generic
+    notes: "house sales, 74 columns"
+
+  - id: gen-modeldata-credit
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/credit_data.csv
+    size_bytes: 286820
+    expected: generic
+
+  - id: gen-modeldata-lending-club
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/lending_club.csv
+    size_bytes: 999022
+    expected: generic
+
+  - id: gen-rdatasets-gapminder
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/gapminder/gapminder.csv
+    size_bytes: 89519
+    expected: generic
+
+  - id: gen-dplyr-storms
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/dplyr/storms.csv
+    size_bytes: 1286252
+    expected: generic
+
+  - id: gen-rdatasets-mtcars
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/mtcars.csv
+    size_bytes: 1703
+    expected: generic
+
+  - id: gen-openintro-email
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/email.csv
+    size_bytes: 299237
+    expected: generic
+    notes: "spam features, not campaigns"
+
+  - id: gen-openintro-loans
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/loans_full_schema.csv
+    size_bytes: 2531307
+    expected: generic
+
+  - id: gen-openintro-starbucks
+    source: url
+    ref: https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/openintro/starbucks.csv
+    size_bytes: 3843
+    expected: generic
+    notes: "menu nutrition"
+
+  - id: k-fin-sandp500-all-stocks
+    source: kaggle
+    ref: camnugent/sandp500
+    file: "all_stocks_5yr.csv"
+    expected: financial_timeseries
+    notes: "OHLCV for many tickers stacked in one file, ~29 MB"
+
+  - id: k-fin-crypto-bitcoin
+    source: kaggle
+    ref: sudalairajkumar/cryptocurrencypricehistory
+    file: "coin_Bitcoin.csv"
+    expected: financial_timeseries
+    notes: "OHLCV with Marketcap, SNo, Name, Symbol"
+
+  - id: k-fin-nifty50-reliance
+    source: kaggle
+    ref: rohanrao/nifty50-stock-market-data
+    file: "RELIANCE.csv"
+    expected: financial_timeseries
+    notes: "NSE export: Prev Close, Last, VWAP, Turnover"
+
+  - id: k-eco-superstore
+    source: kaggle
+    ref: vivek468/superstore-dataset-final
+    file: "Sample - Superstore.csv"
+    expected: ecommerce_orders
+    notes: "Tableau Superstore: Order Date, Sales, Discount, Profit"
+
+  - id: k-eco-uci-online-retail
+    source: kaggle
+    ref: carrie1/ecommerce-data
+    file: "data.csv"
+    expected: ecommerce_orders
+    notes: "invoice lines: Quantity x UnitPrice, non-UTF-8, ~45 MB"
+
+  - id: k-eco-supermarket-sales
+    source: kaggle
+    ref: aungpyaeap/supermarket-sales
+    file: "supermarket_sales - Sheet1.csv"
+    expected: ecommerce_orders
+    notes: "invoices with product line, payment, rating"
+
+  - id: k-eco-amazon-sale-report
+    source: kaggle
+    ref: thedevastator/unlock-profits-with-e-commerce-sales-data
+    file: "Amazon Sale Report.csv"
+    expected: ecommerce_orders
+    notes: "marketplace order export with status and fulfilment"
+
+  - id: k-eco-olist-orders
+    source: kaggle
+    ref: olistbr/brazilian-ecommerce
+    file: "olist_orders_dataset.csv"
+    expected: [ecommerce_orders, generic]
+    notes: "order headers: status and timestamps, no amounts"
+
+  - id: k-eco-olist-order-items
+    source: kaggle
+    ref: olistbr/brazilian-ecommerce
+    file: "olist_order_items_dataset.csv"
+    expected: [ecommerce_orders, generic]
+    notes: "order lines: price and freight"
+
+  - id: k-eco-olist-payments
+    source: kaggle
+    ref: olistbr/brazilian-ecommerce
+    file: "olist_order_payments_dataset.csv"
+    expected: [ecommerce_orders, generic]
+    notes: "payments: type, installments, value"
+
+  - id: k-eco-customer-behavior
+    source: kaggle
+    ref: shriyashjagtap/e-commerce-customer-for-behavior-analysis
+    file: "E-commerce Customer Behavior - Sheet1.csv"
+    expected: [ecommerce_orders, generic]
+    notes: "one row per customer, not per order"
+
+  - id: k-hr-hrdataset-v14
+    source: kaggle
+    ref: rhuebner/human-resources-data-set
+    file: "HRDataset_v14.csv"
+    expected: hr_workforce
+    notes: "Salary, Termd, PerformanceScore, EngagementSurvey"
+
+  - id: k-hr-employee
+    source: kaggle
+    ref: tawfikelmetwally/employee-dataset
+    file: "Employee.csv"
+    expected: hr_workforce
+    notes: "LeaveOrNot, PaymentTier, JoiningYear"
+
+  - id: k-hr-termination-10yr
+    source: kaggle
+    ref: HRAnalyticRepository/employee-attrition-data
+    file: "MFG10YearTerminationData.csv"
+    expected: hr_workforce
+    notes: "one row per employee-year with STATUS and termination reason"
+
+  - id: k-hr-turnover
+    source: kaggle
+    ref: davinwijaya/employee-turnover
+    file: "turnover.csv"
+    expected: hr_workforce
+    notes: "tenure (stag) and event flag with personality scores"
+
+  - id: k-hr-job-change
+    source: kaggle
+    ref: arashnic/hr-analytics-job-change-of-data-scientists
+    file: "aug_train.csv"
+    expected: [hr_workforce, generic]
+    notes: "candidates looking for a job change"
+
+  - id: k-hc-diabetes-130
+    source: kaggle
+    ref: brandao/diabetes
+    file: "diabetic_data.csv"
+    expected: healthcare_medical
+    notes: "encounters with readmitted, medications, diagnoses, ~19 MB"
+
+  - id: k-hc-noshow
+    source: kaggle
+    ref: joniarroba/noshowappointments
+    file: "KaggleV2-May-2016.csv"
+    expected: healthcare_medical
+    notes: "appointments with No-show flag"
+
+  - id: k-hc-hospital-readmissions
+    source: kaggle
+    ref: dubradave/hospital-readmissions
+    file: "hospital_readmissions.csv"
+    expected: healthcare_medical
+    notes: "stays with readmitted, n_medications, diagnoses"
+
+  - id: k-hc-av-healthcare
+    source: kaggle
+    ref: nehaprabhavalkar/av-healthcare-analytics-ii
+    file: "healthcare/train_data.csv"
+    expected: healthcare_medical
+    notes: "admissions with Stay, Admission_Deposit, Severity"
+
+  - id: k-hc-stroke
+    source: kaggle
+    ref: fedesoriano/stroke-prediction-dataset
+    file: "healthcare-dataset-stroke-data.csv"
+    expected: [healthcare_medical, generic]
+    notes: "patient risk factors with stroke flag"
+
+  - id: k-hc-heart
+    source: kaggle
+    ref: johnsmith88/heart-disease-dataset
+    file: "heart.csv"
+    expected: [healthcare_medical, generic]
+    notes: "clinical measurements with target flag"
+
+  - id: k-hc-medical-premium
+    source: kaggle
+    ref: tejashvi14/medical-insurance-premium-prediction
+    file: "Medicalpremium.csv"
+    expected: [healthcare_medical, generic]
+    notes: "premium price with health flags"
+
+  - id: k-mkt-campaign-performance
+    source: kaggle
+    ref: manishabhatt22/marketing-campaign-performance-dataset
+    file: "marketing_campaign_dataset.csv"
+    expected: marketing_campaign
+    notes: "Campaign_Type, Channel_Used, ROI, Clicks, Impressions"
+
+  - id: k-mkt-facebook-ads
+    source: kaggle
+    ref: loveall/clicks-conversion-tracking
+    file: "KAG_conversion_data.csv"
+    expected: marketing_campaign
+    notes: "Impressions, Clicks, Spent, Total_Conversion"
+
+  - id: k-mkt-customer-personality
+    source: kaggle
+    ref: imakash3011/customer-personality-analysis
+    file: "marketing_campaign.csv"
+    expected: marketing_campaign
+    notes: "CRM response data, tab-delimited"
+
+  - id: k-mkt-ab-testing
+    source: kaggle
+    ref: faviovaz/marketing-ab-testing
+    file: "marketing_AB.csv"
+    expected: marketing_campaign
+    notes: "ad vs psa test group with converted flag"
+
+  - id: k-mkt-bank-marketing
+    source: kaggle
+    ref: henriqueyamahata/bank-marketing
+    file: "bank-additional-full.csv"
+    expected: [marketing_campaign, generic]
+    notes: "telemarketing outcomes, semicolon-delimited"
+
+  - id: k-srv-airline-satisfaction
+    source: kaggle
+    ref: teejmahal20/airline-passenger-satisfaction
+    file: "train.csv"
+    expected: survey_sentiment
+    notes: "service ratings 0-5 with satisfaction label"
+
+  - id: k-srv-twitter-airline
+    source: kaggle
+    ref: crowdflower/twitter-airline-sentiment
+    file: "Tweets.csv"
+    expected: survey_sentiment
+    notes: "tweets with airline_sentiment and negativereason"
+
+  - id: k-srv-mental-health-tech
+    source: kaggle
+    ref: osmi/mental-health-in-tech-survey
+    file: "survey.csv"
+    expected: survey_sentiment
+    notes: "workplace mental-health survey responses"
+
+  - id: k-srv-clothing-reviews
+    source: kaggle
+    ref: nicapotato/womens-ecommerce-clothing-reviews
+    file: "Womens Clothing E-Commerce Reviews.csv"
+    expected: survey_sentiment
+    notes: "review text with rating and recommended flag"
+
+  - id: k-web-website-traffic
+    source: kaggle
+    ref: anthonytherrien/website-traffic
+    file: "website_wata.csv"
+    expected: web_app_analytics
+    notes: "Page Views, Session Duration, Bounce Rate, Traffic Source"
+
+  - id: k-web-online-shoppers
+    source: kaggle
+    ref: imakash3011/online-shoppers-purchasing-intention-dataset
+    file: "online_shoppers_intention.csv"
+    expected: web_app_analytics
+    notes: "session features: BounceRates, ExitRates, VisitorType"
+
+  - id: k-web-daily-visitors
+    source: kaggle
+    ref: bobnau/daily-website-visitors
+    file: "daily-website-visitors.csv"
+    expected: web_app_analytics
+    notes: "daily page loads and unique/returning visits"
+
+  - id: k-web-ab-data
+    source: kaggle
+    ref: zhangluyuan/ab-testing
+    file: "ab_data.csv"
+    expected: [web_app_analytics, marketing_campaign, generic]
+    notes: "landing page test: group, landing_page, converted"

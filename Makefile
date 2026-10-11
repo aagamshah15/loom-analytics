@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help dev api frontend health test test-templates test-ui test-stress smoke-prod triage-csvs
+.PHONY: help dev api frontend health test test-templates test-ui test-stress smoke-prod triage-csvs corpus-list corpus-fetch corpus-eval
 
 help:
 	@echo "Loom developer commands"
@@ -14,6 +14,9 @@ help:
 	@echo "  make test-stress Run backend, browser, and hosted smoke checks"
 	@echo "  make smoke-prod Run hosted Netlify + Render smoke checks"
 	@echo "  make triage-csvs ROOT=/path Run detect + build triage over CSV files"
+	@echo "  make corpus-list  Show the detection corpus and what is not downloaded yet"
+	@echo "  make corpus-fetch Download the missing corpus files (set LOOM_CORPUS_DIR to choose where)"
+	@echo "  make corpus-eval  Score detection and dashboard output against the corpus (ARGS=... for options)"
 
 dev:
 	@./scripts/dev.sh
@@ -47,3 +50,12 @@ smoke-prod:
 
 triage-csvs:
 	@python3 scripts/triage_csvs.py $(ROOT)
+
+corpus-list:
+	@python3 scripts/corpus_fetch.py
+
+corpus-fetch:
+	@python3 scripts/corpus_fetch.py --yes
+
+corpus-eval:
+	@python3 scripts/corpus_eval.py $(ARGS)
