@@ -63,7 +63,8 @@ async def analyze_csv(
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
     with tempfile.TemporaryDirectory(prefix="loom-api-") as tmpdir:
-        input_path = Path(tmpdir) / file.filename
+        # The client-supplied filename is untrusted; never use it to build a path.
+        input_path = Path(tmpdir) / "upload.csv"
         input_path.write_bytes(await file.read())
 
         context = run_pipeline(

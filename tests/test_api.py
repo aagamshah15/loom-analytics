@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import io
 import sys
+import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,21 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("CSV file", response.json()["detail"])
+
+    def test_analyze_keeps_upload_inside_temp_dir(self) -> None:
+        escape_name = f"loom-escape-{uuid.uuid4().hex}.csv"
+        escaped_path = Path(tempfile.gettempdir()) / escape_name
+        self.addCleanup(escaped_path.unlink, missing_ok=True)
+        fixture_path = self.stress_fixtures / "ecommerce" / "happy_path.csv"
+
+        response = self.client.post(
+            "/api/analyze",
+            files={"file": (f"../{escape_name}", io.BytesIO(fixture_path.read_bytes()), "text/csv")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["business_context"]["kind"], "ecommerce_orders")
+        self.assertFalse(escaped_path.exists(), "upload was written outside the request's temp dir")
 
     def test_analyze_accepts_utf8_bom_fixture(self) -> None:
         csv_data = (
