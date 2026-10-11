@@ -8,6 +8,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -254,8 +255,8 @@ def build_financial_insight_candidates(
     optional_features = analysis["optional_features"]
     first_nonzero_volume = _coerce_timestamp(summary.get("first_nonzero_volume"))
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "long_term_growth",
             "title": "Massive long-term price appreciation",
             "category": "growth",
@@ -272,7 +273,7 @@ def build_financial_insight_candidates(
             "section": "overview",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "early_data_quirk",
             "title": "Early historical rows look adjusted or backfilled",
             "category": "quality",
@@ -290,7 +291,7 @@ def build_financial_insight_candidates(
             "priority": 96,
             "condition": summary["early_flat_prefix"] >= 20,
         },
-        {
+        lambda: {
             "id": "volume_appears_later",
             "title": "Real trading volume appears later in the series",
             "category": "volume",
@@ -308,7 +309,7 @@ def build_financial_insight_candidates(
             "priority": 88,
             "condition": first_nonzero_volume is not None and first_nonzero_volume.year > dataset["start_year"] + 1,
         },
-        {
+        lambda: {
             "id": "recent_correction",
             "title": "Recent correction stands out against the longer trend",
             "category": "volatility",
@@ -326,7 +327,7 @@ def build_financial_insight_candidates(
             "priority": 97,
             "condition": summary["recent_correction_pct"] <= -10,
         },
-        {
+        lambda: {
             "id": "sparse_dividends",
             "title": "Dividend events are sparse relative to the full history",
             "category": "dividends",
@@ -341,7 +342,7 @@ def build_financial_insight_candidates(
             "priority": 76,
             "condition": optional_features["has_dividends"] and summary["dividend_events"] > 0,
         },
-        {
+        lambda: {
             "id": "weekday_edge",
             "title": "Intraday returns are not evenly distributed across weekdays",
             "category": "seasonality",
@@ -359,7 +360,7 @@ def build_financial_insight_candidates(
             "priority": 85,
             "condition": signals["weekday"]["spread"] >= 0.02,
         },
-        {
+        lambda: {
             "id": "month_effect",
             "title": "Monthly seasonality is stronger than most users would expect",
             "category": "seasonality",
@@ -377,7 +378,7 @@ def build_financial_insight_candidates(
             "priority": 83,
             "condition": signals["month"]["spread"] >= 0.05,
         },
-        {
+        lambda: {
             "id": "volatility_regime",
             "title": "Volatility clusters by decade",
             "category": "volatility",
@@ -395,7 +396,7 @@ def build_financial_insight_candidates(
             "priority": 84,
             "condition": signals["decade"]["spread"] >= 0.25,
         },
-        {
+        lambda: {
             "id": "overnight_gap_bias",
             "title": "Overnight gaps reveal a directional bias",
             "category": "gaps",
@@ -413,7 +414,7 @@ def build_financial_insight_candidates(
             "priority": 81,
             "condition": (summary["gap_up"] + summary["gap_down"]) > 0,
         },
-        {
+        lambda: {
             "id": "volume_cluster",
             "title": "Extreme volume is clustered, not evenly spread",
             "category": "volume",
@@ -431,7 +432,7 @@ def build_financial_insight_candidates(
             "priority": 82,
             "condition": summary["top_volume_span_years"] <= 5,
         },
-    ]
+    ])
 
     filtered = [item for item in insights if item.get("condition", True)]
     prompt_terms = extract_prompt_terms(user_prompt)

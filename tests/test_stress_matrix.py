@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import random
 import sys
 import unittest
 from pathlib import Path
+
+import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -13,7 +16,12 @@ if str(SRC_ROOT) not in sys.path:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from pipeline.business.router import analyze_for_kind, build_insight_candidates, detect_business_context
+from pipeline.business.router import (
+    analyze_for_kind,
+    build_dashboard,
+    build_insight_candidates,
+    detect_business_context,
+)
 from pipeline.common.contracts import PipelineContext
 from pipeline.run import run_pipeline
 from template_generators import (
@@ -24,12 +32,45 @@ from template_generators import (
     generate_healthcare_outcomes_fixture,
     generate_hr_fixture,
     generate_large_fixture,
+    generate_marketing_attribution_fixture,
     generate_marketing_closed_deals_fixture,
     generate_marketing_crm_fixture,
     generate_marketing_lead_fixture,
     generate_survey_fixture,
     generate_web_analytics_fixture,
 )
+
+
+PROFILE_GENERATORS = {
+    "financial": generate_financial_fixture,
+    "ecommerce": generate_ecommerce_fixture,
+    "healthcare_outcomes": generate_healthcare_outcomes_fixture,
+    "healthcare_admissions": generate_healthcare_admissions_fixture,
+    "healthcare_insurance": generate_healthcare_insurance_fixture,
+    "hr": generate_hr_fixture,
+    "marketing_attribution": generate_marketing_attribution_fixture,
+    "marketing_crm": generate_marketing_crm_fixture,
+    "marketing_lead": generate_marketing_lead_fixture,
+    "marketing_closed_deals": generate_marketing_closed_deals_fixture,
+    "survey": generate_survey_fixture,
+    "web_analytics": generate_web_analytics_fixture,
+}
+
+
+def scramble_labels(frame: pd.DataFrame, *, min_distinct: int, seed: int = 5) -> pd.DataFrame:
+    """Replace category labels with opaque tokens, as a dataset with unfamiliar labels would have."""
+    rng = random.Random(seed)
+    scrambled = frame.copy()
+    for column in scrambled.columns:
+        series = scrambled[column]
+        if not (pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)):
+            continue
+        distinct = list(series.dropna().unique())
+        if not min_distinct <= len(distinct) <= 12:
+            continue
+        mapping = {value: f"grp_{rng.randrange(16 ** 6):06x}" for value in distinct}
+        scrambled[column] = series.map(mapping)
+    return scrambled
 
 
 class StressFixtureTests(unittest.TestCase):
@@ -163,6 +204,30 @@ class StressFixtureTests(unittest.TestCase):
                 detected = detect_business_context(context)
                 self.assertIsNotNone(detected)
                 self.assertEqual(detected["kind"], kind)
+
+    def test_unfamiliar_labels_never_break_a_template(self) -> None:
+        # min_distinct=3 keeps yes/no style flags intact; min_distinct=2 scrambles those too.
+        for name, generator in PROFILE_GENERATORS.items():
+            for min_distinct in (3, 2):
+                with self.subTest(generator=name, min_distinct=min_distinct):
+                    frame = scramble_labels(generator(rows=120), min_distinct=min_distinct)
+                    context = PipelineContext(clean_df=frame, raw_df=frame)
+
+                    detected = detect_business_context(context)
+                    self.assertEqual(context.metadata.get("template_errors", []), [])
+                    if detected is None:
+                        continue
+
+                    review = build_insight_candidates(detected["kind"], detected["analysis"], "focus on risk")
+                    dashboard = build_dashboard(
+                        detected["kind"],
+                        detected["analysis"],
+                        approved_insight_ids=[item["id"] for item in review["insights"][:3]],
+                        settings={},
+                    )
+                    self.assertIsNotNone(dashboard)
+                    self.assertTrue(dashboard["html"])
+                    self.assertGreater(len(dashboard["blueprint"]["layout_sections"]), 0)
 
 
 if __name__ == "__main__":

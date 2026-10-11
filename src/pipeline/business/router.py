@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+import logging
+from typing import Any, Callable, Optional
 
 from pipeline.business.ecommerce_dashboard import (
     analyze_ecommerce_context,
@@ -46,145 +47,35 @@ from pipeline.business.financial_dashboard import (
 )
 from pipeline.common.contracts import PipelineContext
 
+logger = logging.getLogger(__name__)
+
+
+# Detection order matters: the first template whose analyzer accepts the dataset wins.
+_TEMPLATES: list[tuple[str, str, float, Callable[[PipelineContext], Optional[dict[str, Any]]]]] = [
+    ("financial_timeseries", "Financial Time Series", 0.94, analyze_financial_context),
+    ("ecommerce_orders", "E-commerce / Retail", 0.92, analyze_ecommerce_context),
+    ("healthcare_medical", "Healthcare / Medical", 0.91, analyze_healthcare_context),
+    ("marketing_campaign", "Marketing / Campaign", 0.9, analyze_marketing_context),
+    ("hr_workforce", "HR / Workforce", 0.9, analyze_hr_context),
+    ("survey_sentiment", "Survey / Sentiment", 0.89, analyze_survey_context),
+    ("web_app_analytics", "Web / App Analytics", 0.88, analyze_web_analytics_context),
+]
+
 
 def detect_business_context(context: PipelineContext) -> Optional[dict[str, Any]]:
-    financial = analyze_financial_context(context)
-    if financial is not None:
-        return {
-            "kind": "financial_timeseries",
-            "analysis": financial,
-            "display_name": "Financial Time Series",
-            "confidence": 0.94,
-        }
-
-    ecommerce = analyze_ecommerce_context(context)
-    if ecommerce is not None:
-        return {
-            "kind": "ecommerce_orders",
-            "analysis": ecommerce,
-            "display_name": "E-commerce / Retail",
-            "confidence": 0.92,
-        }
-
-    healthcare = analyze_healthcare_context(context)
-    if healthcare is not None:
-        return {
-            "kind": "healthcare_medical",
-            "analysis": healthcare,
-            "display_name": "Healthcare / Medical",
-            "confidence": 0.91,
-        }
-
-    marketing = analyze_marketing_context(context)
-    if marketing is not None:
-        return {
-            "kind": "marketing_campaign",
-            "analysis": marketing,
-            "display_name": "Marketing / Campaign",
-            "confidence": 0.9,
-        }
-
-    hr = analyze_hr_context(context)
-    if hr is not None:
-        return {
-            "kind": "hr_workforce",
-            "analysis": hr,
-            "display_name": "HR / Workforce",
-            "confidence": 0.9,
-        }
-
-    survey = analyze_survey_context(context)
-    if survey is not None:
-        return {
-            "kind": "survey_sentiment",
-            "analysis": survey,
-            "display_name": "Survey / Sentiment",
-            "confidence": 0.89,
-        }
-
-    web_analytics = analyze_web_analytics_context(context)
-    if web_analytics is not None:
-        return {
-            "kind": "web_app_analytics",
-            "analysis": web_analytics,
-            "display_name": "Web / App Analytics",
-            "confidence": 0.88,
-        }
-
+    for kind, display_name, confidence, analyze in _TEMPLATES:
+        analysis = _try_analyze(kind, analyze, context)
+        if analysis is not None:
+            return {
+                "kind": kind,
+                "analysis": analysis,
+                "display_name": display_name,
+                "confidence": confidence,
+            }
     return None
 
 
 def analyze_for_kind(context: PipelineContext, kind: str) -> Optional[dict[str, Any]]:
-    if kind == "financial_timeseries":
-        analysis = analyze_financial_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "financial_timeseries",
-            "analysis": analysis,
-            "display_name": "Financial Time Series",
-            "confidence": 0.94,
-        }
-    if kind == "ecommerce_orders":
-        analysis = analyze_ecommerce_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "ecommerce_orders",
-            "analysis": analysis,
-            "display_name": "E-commerce / Retail",
-            "confidence": 0.92,
-        }
-    if kind == "healthcare_medical":
-        analysis = analyze_healthcare_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "healthcare_medical",
-            "analysis": analysis,
-            "display_name": "Healthcare / Medical",
-            "confidence": 0.91,
-        }
-    if kind == "marketing_campaign":
-        analysis = analyze_marketing_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "marketing_campaign",
-            "analysis": analysis,
-            "display_name": "Marketing / Campaign",
-            "confidence": 0.9,
-        }
-    if kind == "hr_workforce":
-        analysis = analyze_hr_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "hr_workforce",
-            "analysis": analysis,
-            "display_name": "HR / Workforce",
-            "confidence": 0.9,
-        }
-    if kind == "survey_sentiment":
-        analysis = analyze_survey_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "survey_sentiment",
-            "analysis": analysis,
-            "display_name": "Survey / Sentiment",
-            "confidence": 0.89,
-        }
-    if kind == "web_app_analytics":
-        analysis = analyze_web_analytics_context(context)
-        if analysis is None:
-            return None
-        return {
-            "kind": "web_app_analytics",
-            "analysis": analysis,
-            "display_name": "Web / App Analytics",
-            "confidence": 0.88,
-        }
     if kind == "generic":
         return {
             "kind": "generic",
@@ -192,7 +83,35 @@ def analyze_for_kind(context: PipelineContext, kind: str) -> Optional[dict[str, 
             "display_name": "Generic CSV",
             "confidence": 0.5,
         }
+    for template_kind, display_name, confidence, analyze in _TEMPLATES:
+        if template_kind != kind:
+            continue
+        analysis = _try_analyze(kind, analyze, context)
+        if analysis is None:
+            return None
+        return {
+            "kind": kind,
+            "analysis": analysis,
+            "display_name": display_name,
+            "confidence": confidence,
+        }
     return None
+
+
+def _try_analyze(
+    kind: str,
+    analyze: Callable[[PipelineContext], Optional[dict[str, Any]]],
+    context: PipelineContext,
+) -> Optional[dict[str, Any]]:
+    """Run one template's analyzer; a template that breaks on a dataset must not sink the upload."""
+    try:
+        return analyze(context)
+    except Exception as exc:
+        logger.exception("Template %s failed while analyzing the dataset", kind)
+        context.metadata.setdefault("template_errors", []).append(
+            {"kind": kind, "stage": "analyze", "error": f"{type(exc).__name__}: {exc}"}
+        )
+        return None
 
 
 def build_insight_candidates(kind: str, analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:

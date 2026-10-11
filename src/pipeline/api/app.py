@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -20,6 +21,8 @@ from pipeline.business.router import (
 )
 from pipeline.common.reporting import build_report_dict
 from pipeline.run import run_pipeline
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -76,7 +79,6 @@ async def analyze_csv(
             include_visualizations=False,
         )
 
-    report = build_report_dict(context)
     detected = detect_business_context(context)
     business_context = None
 
@@ -87,14 +89,24 @@ async def analyze_csv(
     else:
         business_context = detected
 
+    review = {"insights": [], "focus_tags": []}
     if business_context is not None and business_context["kind"] != "generic":
-        review = build_insight_candidates(business_context["kind"], business_context["analysis"], "")
-    else:
-        review = {"insights": [], "focus_tags": []}
+        try:
+            review = build_insight_candidates(business_context["kind"], business_context["analysis"], "")
+        except Exception as exc:
+            # A template that cannot describe this dataset should cost the user the template, not the upload.
+            logger.exception("Template %s failed while building insights", business_context["kind"])
+            context.metadata.setdefault("template_errors", []).append(
+                {"kind": business_context["kind"], "stage": "insights", "error": f"{type(exc).__name__}: {exc}"}
+            )
+            context.add_warning(f"The {business_context['display_name']} template could not be applied to this file.")
+            if detected is business_context:
+                detected = None
+            business_context = None
 
     return jsonable_encoder(
         {
-            "report": report,
+            "report": build_report_dict(context),
             "detected_template": detected,
             "business_context": business_context,
             "review": review,

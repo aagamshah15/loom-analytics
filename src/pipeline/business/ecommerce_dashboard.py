@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -261,8 +262,8 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
     dataset = analysis["dataset"]
     signals = analysis["signals"]
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "discount_paradox",
             "title": "Discounts may be destroying margin without reducing returns",
             "category": "discounts",
@@ -277,7 +278,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 98,
             "condition": summary["discount_return_spread"] <= 2.5,
         },
-        {
+        lambda: {
             "id": "friday_effect",
             "title": "Late-week shoppers are worth more",
             "category": "revenue",
@@ -291,7 +292,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "section": "revenue",
             "priority": 90,
         },
-        {
+        lambda: {
             "id": "channel_winner",
             "title": "High-intent traffic is outperforming discovery traffic",
             "category": "channels",
@@ -309,7 +310,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 88,
             "condition": summary["direct_referral_aov"] is not None and summary["organic_aov"] is not None,
         },
-        {
+        lambda: {
             "id": "payment_myth",
             "title": "Payment-method risk looks different from intuition",
             "category": "payments",
@@ -326,7 +327,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 86,
             "condition": summary["best_payment_return"] is not None and summary["worst_payment_return"] is not None,
         },
-        {
+        lambda: {
             "id": "clothing_return_bomb",
             "title": "One category is carrying disproportionate return pain",
             "category": "categories",
@@ -345,7 +346,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 99,
             "condition": summary["clothing_return_rate"] is not None and summary["clothing_return_rate"] >= summary["return_rate"] + 4,
         },
-        {
+        lambda: {
             "id": "repeat_base",
             "title": "Revenue is being carried by a repeat-heavy customer base",
             "category": "customers",
@@ -360,7 +361,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 78,
             "condition": summary["repeat_order_share"] is not None,
         },
-    ]
+    ])
 
     filtered = [item for item in insights if item.get("condition", True)]
     prompt_terms = extract_prompt_terms(user_prompt)

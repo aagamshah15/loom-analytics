@@ -393,6 +393,35 @@ class ApiTests(unittest.TestCase):
         self.assertIn("blueprint", payload)
         self.assertEqual(payload["kind"], "web_app_analytics")
 
+    def test_web_analytics_csv_with_unfamiliar_labels_does_not_fail(self) -> None:
+        rows = ["device,channel,page,sessions,conversions,bounce_rate,load_time"]
+        for idx in range(30):
+            rows.append(
+                f"{'iOS' if idx % 2 else 'Android'},{'Organic' if idx % 3 else 'Paid'},"
+                f"{'Pricing' if idx % 2 else 'Docs'},{200 + idx},{10 + idx % 7},{40 + idx % 9},{2.0 + idx % 3}"
+            )
+
+        analyze_response = self.client.post(
+            "/api/analyze",
+            files={"file": ("web.csv", io.BytesIO("\n".join(rows).encode("utf-8")), "text/csv")},
+        )
+        self.assertEqual(analyze_response.status_code, 200)
+        analyze_payload = analyze_response.json()
+        self.assertEqual(analyze_payload["business_context"]["kind"], "web_app_analytics")
+        self.assertNotIn("template_errors", analyze_payload["report"]["metadata"])
+
+        build_response = self.client.post(
+            "/api/build-dashboard",
+            json={
+                "kind": "web_app_analytics",
+                "analysis": analyze_payload["business_context"]["analysis"],
+                "approved_insight_ids": [item["id"] for item in analyze_payload["review"]["insights"]],
+                "settings": {},
+            },
+        )
+        self.assertEqual(build_response.status_code, 200)
+        self.assertGreater(len(build_response.json()["blueprint"]["layout_sections"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

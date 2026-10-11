@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -197,8 +198,8 @@ def analyze_web_analytics_context(context: PipelineContext) -> Optional[dict[str
 def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "mobile_conversion_leak",
             "title": "Mobile is the biggest conversion leak",
             "category": "mobile",
@@ -219,7 +220,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 100,
             "condition": summary["mobile_sessions_share"] is not None and summary["desktop_conversion_rate"] is not None,
         },
-        {
+        lambda: {
             "id": "social_traffic_wasted",
             "title": "Social traffic is largely wasted",
             "category": "channels",
@@ -237,7 +238,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 97,
             "condition": summary["social_conversion_rate"] is not None,
         },
-        {
+        lambda: {
             "id": "onboarding_email_winner",
             "title": "Onboarding email is the hidden champion",
             "category": "campaigns",
@@ -255,7 +256,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 96,
             "condition": summary["best_campaign_conversion_rate"] is not None,
         },
-        {
+        lambda: {
             "id": "blog_black_hole",
             "title": "Blog is a conversion black hole",
             "category": "content",
@@ -273,7 +274,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 92,
             "condition": summary["blog_conversion_rate"] is not None and summary["blog_time_on_page"] is not None,
         },
-        {
+        lambda: {
             "id": "home_is_top_exit",
             "title": "The homepage is acting like the main exit page",
             "category": "content",
@@ -288,7 +289,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 95,
             "condition": summary["home_exit_count"] is not None and summary["top_exit_page"] is not None,
         },
-        {
+        lambda: {
             "id": "returning_visitors_underperform",
             "title": "Returning visitors barely convert better than new ones",
             "category": "retention",
@@ -306,7 +307,7 @@ def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 88,
             "condition": summary["returning_conversion_rate"] is not None and summary["new_conversion_rate"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 

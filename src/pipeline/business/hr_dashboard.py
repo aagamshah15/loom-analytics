@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -210,8 +211,8 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "high_performers_leave_too",
             "title": "High performers leave just as much",
             "category": "performance",
@@ -227,7 +228,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "section": "retention",
             "priority": 95,
         },
-        {
+        lambda: {
             "id": "engagement_does_not_save_attrition",
             "title": "Very high engagement does not prevent attrition",
             "category": "engagement",
@@ -243,7 +244,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "section": "retention",
             "priority": 97,
         },
-        {
+        lambda: {
             "id": "vp_gender_pay_gap",
             "title": "The VP gender pay gap widens at senior levels",
             "category": "pay_equity",
@@ -260,7 +261,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "priority": 98,
             "condition": summary["female_vp_salary"] is not None and summary["male_vp_salary"] is not None,
         },
-        {
+        lambda: {
             "id": "training_is_controllable_lever",
             "title": "Training is the strongest controllable lever",
             "category": "training",
@@ -277,7 +278,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "priority": 92,
             "condition": summary["high_training_engagement"] > 0 or summary["low_training_engagement"] > 0,
         },
-        {
+        lambda: {
             "id": "remote_retention_risk",
             "title": "Remote workers are a quiet retention risk",
             "category": "remote",
@@ -294,7 +295,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "priority": 89,
             "condition": summary["remote_attrition"] is not None and summary["onsite_attrition"] is not None,
         },
-        {
+        lambda: {
             "id": "customer_support_crisis",
             "title": "Customer Support is a structural crisis",
             "category": "department",
@@ -311,7 +312,7 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "priority": 99,
             "condition": summary["customer_support_attrition"] is not None,
         },
-    ]
+    ])
 
     filtered = [item for item in insights if item.get("condition", True)]
     prompt_terms = extract_prompt_terms(user_prompt)

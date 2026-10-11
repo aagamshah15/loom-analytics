@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -327,8 +328,8 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "adherence_beats_everything",
             "title": "Adherence beats everything else",
             "category": "adherence",
@@ -345,7 +346,7 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "adherence",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "telehealth_quietly_winning",
             "title": "Telehealth is quietly winning",
             "category": "telehealth",
@@ -365,7 +366,7 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 95,
             "condition": summary["telehealth_readmission"] is not None and summary["in_person_readmission"] is not None,
         },
-        {
+        lambda: {
             "id": "follow_up_placebo",
             "title": "Scheduling follow-ups does little on its own",
             "category": "follow_up",
@@ -382,7 +383,7 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "care_delivery",
             "priority": 90,
         },
-        {
+        lambda: {
             "id": "self_pay_system_failure",
             "title": "Self-pay patients look like a system failure",
             "category": "cost",
@@ -400,7 +401,7 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 98,
             "condition": summary["self_pay_cost"] is not None and summary["self_pay_low_adherence"] is not None,
         },
-        {
+        lambda: {
             "id": "equity_gap_measurable",
             "title": "The equity gap is measurable",
             "category": "equity",
@@ -418,7 +419,7 @@ def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 92,
             "condition": summary["white_readmission"] is not None and summary["black_readmission"] is not None and summary["hispanic_readmission"] is not None,
         },
-    ]
+    ])
 
     filtered = [item for item in insights if item.get("condition", True)]
     prompt_terms = extract_prompt_terms(user_prompt)
@@ -434,8 +435,8 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "admission_type_cost_flat",
             "title": "Admission type barely changes cost",
             "category": "operations",
@@ -452,7 +453,7 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
             "section": "utilization",
             "priority": 94,
         },
-        {
+        lambda: {
             "id": "length_of_stay_flat",
             "title": "Length of stay is operationally flat",
             "category": "operations",
@@ -469,7 +470,7 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
             "section": "utilization",
             "priority": 91,
         },
-        {
+        lambda: {
             "id": "obesity_cost_signal",
             "title": "Obesity is the most expensive condition in the file",
             "category": "diagnosis",
@@ -486,7 +487,7 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
             "section": "diagnoses",
             "priority": 99,
         },
-        {
+        lambda: {
             "id": "diagnostic_ambiguity_signal",
             "title": "Inconclusive results are too common to ignore",
             "category": "diagnosis",
@@ -500,7 +501,7 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
             "section": "diagnoses",
             "priority": 93,
         },
-        {
+        lambda: {
             "id": "payer_pricing_flat",
             "title": "Payer pricing is surprisingly flat",
             "category": "billing",
@@ -517,7 +518,7 @@ def _build_admissions_insight_candidates(analysis: dict[str, Any], user_prompt: 
             "section": "billing",
             "priority": 92,
         },
-    ]
+    ])
 
     prompt_terms = extract_prompt_terms(user_prompt)
     for item in insights:
@@ -532,8 +533,8 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "smoking_cost_wall",
             "title": "Smoking dominates the cost structure",
             "category": "risk_factors",
@@ -550,7 +551,7 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "risk_factors",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "obesity_cost_compounder",
             "title": "Obesity is a quiet cost compounder",
             "category": "risk_factors",
@@ -567,7 +568,7 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "risk_factors",
             "priority": 94,
         },
-        {
+        lambda: {
             "id": "region_is_not_the_story",
             "title": "Region is not the real story",
             "category": "pricing",
@@ -584,7 +585,7 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "pricing",
             "priority": 89,
         },
-        {
+        lambda: {
             "id": "gender_gap_is_small",
             "title": "The gender cost gap is modest",
             "category": "demographics",
@@ -600,7 +601,7 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "demographics",
             "priority": 83,
         },
-        {
+        lambda: {
             "id": "age_matters_but_not_enough",
             "title": "Age matters, but not enough to explain the whole file",
             "category": "demographics",
@@ -614,7 +615,7 @@ def _build_insurance_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "section": "demographics",
             "priority": 86,
         },
-    ]
+    ])
 
     prompt_terms = extract_prompt_terms(user_prompt)
     for item in insights:
@@ -629,8 +630,8 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "claims_fraud_baseline",
             "title": "Fraud is measurable enough to manage directly",
             "category": "fraud",
@@ -647,7 +648,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "fraud",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "specialty_fraud_concentration",
             "title": "Provider specialty is carrying fraud concentration",
             "category": "providers",
@@ -661,7 +662,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "providers",
             "priority": 97,
         },
-        {
+        lambda: {
             "id": "high_claims_need_separate_review",
             "title": "High-dollar claims deserve a separate review lane",
             "category": "billing",
@@ -678,7 +679,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "billing",
             "priority": 94,
         },
-        {
+        lambda: {
             "id": "approval_gap_is_a_leakage_signal",
             "title": "Approval gaps reveal payer friction",
             "category": "payer",
@@ -695,7 +696,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "billing",
             "priority": 91,
         },
-        {
+        lambda: {
             "id": "diagnosis_code_outliers",
             "title": "Diagnosis codes create a claims-review shortcut",
             "category": "utilization",
@@ -709,7 +710,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "utilization",
             "priority": 89,
         },
-        {
+        lambda: {
             "id": "provider_volume_watchlist",
             "title": "Provider volume exposes audit leverage",
             "category": "providers",
@@ -726,7 +727,7 @@ def _build_claims_insight_candidates(analysis: dict[str, Any], user_prompt: str 
             "section": "providers",
             "priority": 86,
         },
-    ]
+    ])
 
     prompt_terms = extract_prompt_terms(user_prompt)
     for item in insights:

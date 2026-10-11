@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -265,8 +266,8 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
 
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "buyer_user_gap",
             "title": "Executives love it, end users hate it",
             "category": "stakeholders",
@@ -281,7 +282,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "priority": 100,
             "condition": summary["executive_nps"] is not None and summary["end_user_nps"] is not None,
         },
-        {
+        lambda: {
             "id": "onboarding_problem",
             "title": "New customers are your biggest detractors",
             "category": "onboarding",
@@ -296,7 +297,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "priority": 98,
             "condition": summary["new_customer_nps"] is not None and summary["veteran_nps"] is not None,
         },
-        {
+        lambda: {
             "id": "effort_is_best_predictor",
             "title": "Effort score is the best NPS predictor",
             "category": "effort",
@@ -311,7 +312,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "priority": 97,
             "condition": summary["ces_correlation"] is not None,
         },
-        {
+        lambda: {
             "id": "recommendation_contradiction",
             "title": "\"Would recommend\" is much rosier than NPS",
             "category": "stakeholders",
@@ -325,7 +326,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "section": "stakeholders",
             "priority": 92,
         },
-        {
+        lambda: {
             "id": "reporting_is_the_broken_feature",
             "title": "Reporting is the most broken feature",
             "category": "product",
@@ -340,7 +341,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "priority": 96,
             "condition": summary["reporting_score"] is not None and summary["reliability_score"] is not None,
         },
-        {
+        lambda: {
             "id": "detractors_are_churn_risk",
             "title": "Detractors are already showing renewal risk",
             "category": "renewal",
@@ -355,7 +356,7 @@ def _build_b2b_insight_candidates(analysis: dict[str, Any], user_prompt: str = "
             "priority": 95,
             "condition": summary["detractor_renewal_intent"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
@@ -903,8 +904,8 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
     highest_time_segment = str(summary.get("highest_time_segment") or "Time segment")
     highest_time_negative_rate = float(summary.get("highest_time_negative_rate") or 0.0)
     source_count = len(signals.get("source_negative_rate", {}).get("labels", []))
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "sentiment_baseline",
             "title": "The sentiment mix sets the first decision layer",
             "category": "language",
@@ -918,7 +919,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "section": "language",
             "priority": 93,
         },
-        {
+        lambda: {
             "id": "source_mix_matters",
             "title": "Sentiment varies by source, so the average is hiding context",
             "category": "sources",
@@ -933,7 +934,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "priority": 91,
             "condition": source_count > 1,
         },
-        {
+        lambda: {
             "id": "sentiment_skews_negative",
             "title": "Negative sentiment is outweighing the positive conversation",
             "category": "language",
@@ -948,7 +949,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "priority": 96,
             "condition": summary["negative_rate"] >= summary["positive_rate"],
         },
-        {
+        lambda: {
             "id": "source_hotspot",
             "title": "One source is carrying disproportionate negativity",
             "category": "sources",
@@ -963,7 +964,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "priority": 94,
             "condition": summary["most_negative_source"] is not None and summary["most_negative_source_rate"] is not None,
         },
-        {
+        lambda: {
             "id": "polarized_conversation",
             "title": "The conversation is polarized rather than neutral",
             "category": "language",
@@ -978,7 +979,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "priority": 90,
             "condition": summary["neutral_rate"] < 35,
         },
-        {
+        lambda: {
             "id": "time_segment_spike",
             "title": "Negative sentiment clusters in one time segment",
             "category": "momentum",
@@ -993,7 +994,7 @@ def _build_text_sentiment_insight_candidates(analysis: dict[str, Any], user_prom
             "priority": 88,
             "condition": summary["highest_time_segment"] is not None and summary["highest_time_negative_rate"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
@@ -1093,8 +1094,8 @@ def _analyze_satisfaction_survey_context(df: pd.DataFrame) -> Optional[dict[str,
 def _build_satisfaction_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "weakest_experience_dimension",
             "title": f"{summary['weakest_feature']} is the weakest part of the experience",
             "category": "experience",
@@ -1108,7 +1109,7 @@ def _build_satisfaction_insight_candidates(analysis: dict[str, Any], user_prompt
             "section": "experience",
             "priority": 98,
         },
-        {
+        lambda: {
             "id": "loyalty_does_not_match_experience",
             "title": "Experience scores are stronger than the loyalty outcome",
             "category": "loyalty",
@@ -1123,7 +1124,7 @@ def _build_satisfaction_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 94,
             "condition": summary["loyalty_rate"] < 75,
         },
-        {
+        lambda: {
             "id": "experience_is_inconsistent",
             "title": "The experience stack is inconsistent across features",
             "category": "experience",
@@ -1138,7 +1139,7 @@ def _build_satisfaction_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 91,
             "condition": summary["experience_spread"] >= 0.75,
         },
-        {
+        lambda: {
             "id": "promo_discovery_concentrated",
             "title": "Promotion discovery is concentrated in a small set of channels",
             "category": "channels",
@@ -1153,7 +1154,7 @@ def _build_satisfaction_insight_candidates(analysis: dict[str, Any], user_prompt
             "priority": 86,
             "condition": summary["top_promo_channel"] is not None and summary["top_promo_channel_share"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
@@ -1252,8 +1253,8 @@ def _analyze_wellbeing_survey_context(df: pd.DataFrame) -> Optional[dict[str, An
 def _build_wellbeing_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "top_barrier",
             "title": "One barrier is clearly blocking action",
             "category": "barriers",
@@ -1268,7 +1269,7 @@ def _build_wellbeing_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 97,
             "condition": summary["top_barrier"] is not None and summary["top_barrier_share"] is not None,
         },
-        {
+        lambda: {
             "id": "app_interest_signal",
             "title": "Digital support interest is already present",
             "category": "wellbeing",
@@ -1283,7 +1284,7 @@ def _build_wellbeing_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 92,
             "condition": summary["app_interest_rate"] >= 40,
         },
-        {
+        lambda: {
             "id": "social_impact",
             "title": "The issue is affecting daily participation, not just awareness",
             "category": "wellbeing",
@@ -1298,7 +1299,7 @@ def _build_wellbeing_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 95,
             "condition": summary["social_impact_rate"] >= 20,
         },
-        {
+        lambda: {
             "id": "care_belief_gap",
             "title": "Belief in early care is strong, but action still stalls",
             "category": "barriers",
@@ -1313,7 +1314,7 @@ def _build_wellbeing_insight_candidates(analysis: dict[str, Any], user_prompt: s
             "priority": 88,
             "condition": summary["early_care_score"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 

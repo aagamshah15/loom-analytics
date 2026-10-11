@@ -7,6 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 from jinja2 import Template
 
+from pipeline.business.common import collect_insights
 from pipeline.common.contracts import PipelineContext
 
 
@@ -516,8 +517,8 @@ def build_marketing_insight_candidates(analysis: dict[str, Any], user_prompt: st
 def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "channel_budget_black_holes",
             "title": "Big channels are acting like budget black holes",
             "category": "channels",
@@ -531,7 +532,7 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "section": "channels",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "email_hidden_champion",
             "title": "Email is the hidden champion",
             "category": "email",
@@ -546,7 +547,7 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "priority": 98,
             "condition": summary["email_roas"] is not None and summary["paid_search_roas"] is not None,
         },
-        {
+        lambda: {
             "id": "ab_tests_making_things_worse",
             "title": "Your A/B tests are making things worse",
             "category": "testing",
@@ -561,7 +562,7 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "priority": 97,
             "condition": summary["control_roas"] is not None and summary["variant_a_roas"] is not None and summary["variant_b_roas"] is not None,
         },
-        {
+        lambda: {
             "id": "connected_tv_surprise",
             "title": "Connected TV is outperforming expectations",
             "category": "device",
@@ -576,7 +577,7 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "priority": 92,
             "condition": summary["ctv_roas"] is not None and summary["desktop_roas"] is not None,
         },
-        {
+        lambda: {
             "id": "age_targeting_barely_matters",
             "title": "Age targeting barely matters",
             "category": "audience",
@@ -590,7 +591,7 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "section": "audience",
             "priority": 89,
         },
-        {
+        lambda: {
             "id": "mobile_conversion_leak",
             "title": "Mobile is a conversion leak",
             "category": "funnel",
@@ -605,15 +606,15 @@ def _build_attribution_insights(analysis: dict[str, Any], user_prompt: str) -> d
             "priority": 96,
             "condition": summary["mobile_bounce"] is not None and summary["desktop_bounce_reference"] is not None and summary["mobile_impression_share"] is not None,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
 def _build_crm_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "prior_winners_dominate_response",
             "title": "Past campaign winners are the real audience",
             "category": "offers",
@@ -627,7 +628,7 @@ def _build_crm_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str,
             "section": "offers",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "high_value_customers_drive_response",
             "title": "High-value customers respond disproportionately",
             "category": "customers",
@@ -641,7 +642,7 @@ def _build_crm_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str,
             "section": "customers",
             "priority": 97,
         },
-        {
+        lambda: {
             "id": "high_site_visits_do_not_equal_intent",
             "title": "Heavy site visits are not converting into campaign response",
             "category": "retention",
@@ -655,7 +656,7 @@ def _build_crm_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str,
             "section": "retention",
             "priority": 92,
         },
-        {
+        lambda: {
             "id": "households_with_children_underrespond",
             "title": "Households with children respond much less",
             "category": "segments",
@@ -669,15 +670,15 @@ def _build_crm_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str,
             "section": "segments",
             "priority": 90,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
 def _build_lead_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "lead_source_concentration",
             "title": "Lead generation is concentrated in a small set of origins",
             "category": "leads",
@@ -691,7 +692,7 @@ def _build_lead_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "acquisition",
             "priority": 96,
         },
-        {
+        lambda: {
             "id": "landing_page_concentration",
             "title": "A few landing pages control a huge share of leads",
             "category": "funnel",
@@ -705,7 +706,7 @@ def _build_lead_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "landing_pages",
             "priority": 99,
         },
-        {
+        lambda: {
             "id": "unknown_source_leakage",
             "title": "Unknown source attribution is too large",
             "category": "sources",
@@ -719,7 +720,7 @@ def _build_lead_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "sources",
             "priority": 91,
         },
-        {
+        lambda: {
             "id": "lead_volume_spikes_are_lumpy",
             "title": "Lead volume is lumpy, not evenly distributed",
             "category": "sources",
@@ -733,15 +734,15 @@ def _build_lead_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "sources",
             "priority": 88,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
 def _build_deal_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str, Any]:
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
-    insights = [
-        {
+    insights = collect_insights([
+        lambda: {
             "id": "lead_type_quality_gap",
             "title": "Lead type quality is massively uneven",
             "category": "revenue",
@@ -755,7 +756,7 @@ def _build_deal_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "revenue",
             "priority": 100,
         },
-        {
+        lambda: {
             "id": "behaviour_profile_quality_signal",
             "title": "Behaviour profile is a strong revenue-quality signal",
             "category": "sales_motion",
@@ -769,7 +770,7 @@ def _build_deal_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "sales_motion",
             "priority": 96,
         },
-        {
+        lambda: {
             "id": "manufacturers_outvalue_resellers",
             "title": "Manufacturers dramatically outvalue resellers",
             "category": "sales_motion",
@@ -784,7 +785,7 @@ def _build_deal_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "priority": 92,
             "condition": summary["manufacturer_revenue"] is not None and summary["reseller_revenue"] is not None,
         },
-        {
+        lambda: {
             "id": "segment_volume_concentrated",
             "title": "A few business segments dominate the wins",
             "category": "segments",
@@ -798,7 +799,7 @@ def _build_deal_insights(analysis: dict[str, Any], user_prompt: str) -> dict[str
             "section": "segments",
             "priority": 87,
         },
-    ]
+    ])
     return _score_insights(insights, focus_tags, user_prompt)
 
 
