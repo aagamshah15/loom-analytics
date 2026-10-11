@@ -6,11 +6,25 @@ function apiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
 }
 
+// FastAPI reports failures as {"detail": "..."}; show that message rather than the raw JSON.
+async function readError(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const payload = JSON.parse(text);
+    if (typeof payload?.detail === "string") {
+      return payload.detail;
+    }
+  } catch {
+    // Not JSON (a proxy or gateway error page); fall through to the raw text.
+  }
+  return text || `Request failed with status ${response.status}.`;
+}
+
 export async function getTemplates(): Promise<TemplateOption[]> {
   const response = await fetch(apiUrl("/api/templates"));
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readError(response));
   }
 
   const payload = await response.json();
@@ -30,7 +44,7 @@ export async function analyzeCsv(file: File, templateOverride?: string): Promise
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readError(response));
   }
 
   return response.json();
@@ -48,7 +62,7 @@ export async function regenerateReview(
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readError(response));
   }
 
   return response.json();
@@ -86,7 +100,7 @@ export async function buildDashboard(payload: {
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readError(response));
   }
 
   return response.json();

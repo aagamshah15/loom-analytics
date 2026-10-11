@@ -79,6 +79,16 @@ async def analyze_csv(
             include_visualizations=False,
         )
 
+    if context.raw_df is None:
+        # Nothing was loaded, so there is nothing to analyze. Later-stage failures keep going:
+        # templates can still work from whatever the pipeline did produce.
+        logger.warning("Upload could not be ingested: %s", context.errors)
+        message = next(
+            (error["message"] for error in context.errors if error.get("type") != "unhandled_exception"),
+            "Loom could not read this file as CSV data.",
+        )
+        raise HTTPException(status_code=422, detail=message)
+
     detected = detect_business_context(context)
     business_context = None
 

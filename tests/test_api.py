@@ -474,6 +474,21 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["business_context"]["kind"], "web_app_analytics")
         self.assertEqual(payload["business_context"]["analysis"]["signals"]["channel_conversion_rate"]["labels"], ["social"])
 
+    def test_unreadable_uploads_return_a_readable_422(self) -> None:
+        cases = {
+            "header only": (b"order_date,order_value,category\n", "no data rows"),
+            "empty file": (b"", "no data rows"),
+            "binary content": (b"\x00\x01\x02PK\x03\x04" * 64, "does not appear to be text"),
+        }
+        for label, (content, expected_message) in cases.items():
+            with self.subTest(case=label):
+                response = self.client.post(
+                    "/api/analyze",
+                    files={"file": ("upload.csv", io.BytesIO(content), "text/csv")},
+                )
+                self.assertEqual(response.status_code, 422)
+                self.assertIn(expected_message, response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
