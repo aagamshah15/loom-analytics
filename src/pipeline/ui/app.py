@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 import sys
 
@@ -227,11 +228,11 @@ def _render_business_workflow(result: dict, run_id: str) -> None:
             f"""
             <div class="insight-card">
               <div class="insight-meta">
-                <span class="insight-badge">{insight['category']}</span>
-                <span class="insight-severity">{insight['severity'].upper()}</span>
+                <span class="insight-badge">{escape(insight['category'])}</span>
+                <span class="insight-severity">{escape(insight['severity'].upper())}</span>
               </div>
-              <div class="insight-message">{insight['summary']}</div>
-              <div class="insight-action">{insight['detail']}</div>
+              <div class="insight-message">{escape(insight['summary'])}</div>
+              <div class="insight-action">{escape(insight['detail'])}</div>
             </div>
             """,
             unsafe_allow_html=True,

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 import math
 import re
 from typing import Any, Optional
 
 import pandas as pd
-from jinja2 import Template
 
-from pipeline.business.common import collect_insights
+from pipeline.business.common import collect_insights, html_template, script_json
 from pipeline.common.contracts import PipelineContext
 
 
@@ -903,7 +901,7 @@ def _insight_card(insight: dict[str, Any]) -> dict[str, Any]:
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
-    template = Template(
+    template = html_template(
         """
 <!DOCTYPE html>
 <html lang="en">
@@ -1056,7 +1054,7 @@ def _render_dashboard_html(payload: dict[str, Any]) -> str:
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
     <script>
-      const payload = {{ payload_json | safe }};
+      const payload = {{ payload_json }};
       const gridColor = 'rgba(0,0,0,0.06)';
       const textColor = '#587189';
 
@@ -1167,7 +1165,7 @@ def _render_dashboard_html(payload: dict[str, Any]) -> str:
 </html>
         """
     )
-    return template.render(payload=payload, payload_json=json.dumps(payload, default=_json_default))
+    return template.render(payload=payload, payload_json=script_json(payload, default=_json_default))
 
 
 def _json_default(value: Any) -> Any:

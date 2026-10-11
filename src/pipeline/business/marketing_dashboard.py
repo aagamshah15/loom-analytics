@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Optional
 
 import pandas as pd
-from jinja2 import Template
 
-from pipeline.business.common import collect_insights
+from pipeline.business.common import collect_insights, html_template, script_json
 from pipeline.common.contracts import PipelineContext
 
 
@@ -1261,8 +1259,8 @@ def _build_layout_sections(
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
-    json_payload = json.dumps(payload, default=_json_default)
-    template = Template(
+    json_payload = script_json(payload, default=_json_default)
+    template = html_template(
         """
 <!doctype html>
 <html lang="en">
@@ -1285,28 +1283,31 @@ def _render_dashboard_html(payload: dict[str, Any]) -> str:
   <body>
     <div class="shell" id="app"></div>
     <script>
-      const payload = {{ json_payload | safe }};
+      const payload = {{ json_payload }};
+      const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]
+      ));
       const root = document.getElementById("app");
       const metricCards = payload.metric_cards.map((card) => `
         <div class="metric">
-          <div class="kicker">${card.label}</div>
-          <h3 style="margin-top: 8px;">${card.value}</h3>
-          <p style="color:#78716c;">${card.sub}</p>
+          <div class="kicker">${esc(card.label)}</div>
+          <h3 style="margin-top: 8px;">${esc(card.value)}</h3>
+          <p style="color:#78716c;">${esc(card.sub)}</p>
         </div>
       `).join("");
       const insightCards = payload.approved_insights.map((insight) => `
         <div class="card">
-          <div class="kicker">${insight.category}</div>
-          <h3 style="margin-top: 8px;">${insight.title}</h3>
-          <p>${insight.summary}</p>
-          <p style="color:#78716c;">${insight.detail}</p>
+          <div class="kicker">${esc(insight.category)}</div>
+          <h3 style="margin-top: 8px;">${esc(insight.title)}</h3>
+          <p>${esc(insight.summary)}</p>
+          <p style="color:#78716c;">${esc(insight.detail)}</p>
         </div>
       `).join("");
       root.innerHTML = `
         <section class="hero">
           <div class="kicker">Marketing insight dashboard</div>
-          <h1 style="margin-top: 12px;">${payload.title}</h1>
-          <p style="color:#78716c;">${payload.subtitle}</p>
+          <h1 style="margin-top: 12px;">${esc(payload.title)}</h1>
+          <p style="color:#78716c;">${esc(payload.subtitle)}</p>
         </section>
         <section class="panel"><div class="grid metrics">${metricCards}</div></section>
         <section class="panel"><div class="grid cards">${insightCards}</div></section>

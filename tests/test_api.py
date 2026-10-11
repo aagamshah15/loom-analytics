@@ -422,6 +422,39 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(build_response.status_code, 200)
         self.assertGreater(len(build_response.json()["blueprint"]["layout_sections"]), 0)
 
+    def test_exported_html_escapes_csv_values_and_title(self) -> None:
+        channels = ["<script>alert(1)</script>", "Social", "Email"]
+        pages = ["Home", "Blog", "Pricing"]
+        rows = ["device,channel,page,sessions,conversions,bounce_rate,load_time"]
+        for idx in range(36):
+            rows.append(
+                f"{'Mobile' if idx % 2 else 'Desktop'},{channels[idx % 3]},{pages[idx % 3]},"
+                f"{200 + idx},{10 + idx % 7},{40 + idx % 9},{2.0 + idx % 3}"
+            )
+
+        analyze_response = self.client.post(
+            "/api/analyze",
+            files={"file": ("web.csv", io.BytesIO("\n".join(rows).encode("utf-8")), "text/csv")},
+        )
+        self.assertEqual(analyze_response.status_code, 200)
+        business_context = analyze_response.json()["business_context"]
+        self.assertEqual(business_context["kind"], "web_app_analytics")
+
+        build_response = self.client.post(
+            "/api/build-dashboard",
+            json={
+                "kind": business_context["kind"],
+                "analysis": business_context["analysis"],
+                "approved_insight_ids": [],
+                "settings": {"title": "<img src=x onerror=alert(2)>"},
+            },
+        )
+        self.assertEqual(build_response.status_code, 200)
+        html = build_response.json()["html"]
+        self.assertIn("alert(1)", html)
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertNotIn("<img src=x", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,8 @@ import re
 from typing import Any, Optional
 
 import pandas as pd
-from jinja2 import Template
 
-from pipeline.business.common import collect_insights
+from pipeline.business.common import collect_insights, html_template
 from pipeline.common.contracts import PipelineContext
 
 
@@ -1572,7 +1571,7 @@ def _normalize_impact_signal(value: Any) -> float:
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
-    template = Template(
+    template = html_template(
         """
 <!DOCTYPE html>
 <html lang="en">

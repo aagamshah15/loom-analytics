@@ -336,6 +336,23 @@ def generate_web_analytics_fixture(seed: int = 47, rows: int = 30) -> pd.DataFra
     return pd.DataFrame(records)
 
 
+# One generator per template profile.
+PROFILE_GENERATORS = {
+    "financial": generate_financial_fixture,
+    "ecommerce": generate_ecommerce_fixture,
+    "healthcare_outcomes": generate_healthcare_outcomes_fixture,
+    "healthcare_admissions": generate_healthcare_admissions_fixture,
+    "healthcare_insurance": generate_healthcare_insurance_fixture,
+    "hr": generate_hr_fixture,
+    "marketing_attribution": generate_marketing_attribution_fixture,
+    "marketing_crm": generate_marketing_crm_fixture,
+    "marketing_lead": generate_marketing_lead_fixture,
+    "marketing_closed_deals": generate_marketing_closed_deals_fixture,
+    "survey": generate_survey_fixture,
+    "web_analytics": generate_web_analytics_fixture,
+}
+
+
 def generate_large_fixture(kind: str, rows: int = 1200, seed: int = 97) -> pd.DataFrame:
     generators: dict[str, Callable[[int, int], pd.DataFrame]] = {
         "financial_timeseries": generate_financial_fixture,

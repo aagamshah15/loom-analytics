@@ -25,6 +25,7 @@ from pipeline.business.router import (
 from pipeline.common.contracts import PipelineContext
 from pipeline.run import run_pipeline
 from template_generators import (
+    PROFILE_GENERATORS,
     generate_ecommerce_fixture,
     generate_financial_fixture,
     generate_healthcare_admissions_fixture,
@@ -32,29 +33,12 @@ from template_generators import (
     generate_healthcare_outcomes_fixture,
     generate_hr_fixture,
     generate_large_fixture,
-    generate_marketing_attribution_fixture,
     generate_marketing_closed_deals_fixture,
     generate_marketing_crm_fixture,
     generate_marketing_lead_fixture,
     generate_survey_fixture,
     generate_web_analytics_fixture,
 )
-
-
-PROFILE_GENERATORS = {
-    "financial": generate_financial_fixture,
-    "ecommerce": generate_ecommerce_fixture,
-    "healthcare_outcomes": generate_healthcare_outcomes_fixture,
-    "healthcare_admissions": generate_healthcare_admissions_fixture,
-    "healthcare_insurance": generate_healthcare_insurance_fixture,
-    "hr": generate_hr_fixture,
-    "marketing_attribution": generate_marketing_attribution_fixture,
-    "marketing_crm": generate_marketing_crm_fixture,
-    "marketing_lead": generate_marketing_lead_fixture,
-    "marketing_closed_deals": generate_marketing_closed_deals_fixture,
-    "survey": generate_survey_fixture,
-    "web_analytics": generate_web_analytics_fixture,
-}
 
 
 def scramble_labels(frame: pd.DataFrame, *, min_distinct: int, seed: int = 5) -> pd.DataFrame:

@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from jinja2 import Template
+from jinja2 import Environment
 
 from pipeline.common.contracts import PipelineContext
 
@@ -103,7 +103,7 @@ def build_markdown_summary(context: PipelineContext) -> str:
 
 
 def build_html_summary(context: PipelineContext) -> str:
-    template = Template(
+    template = Environment(autoescape=True).from_string(
         """
 <!DOCTYPE html>
 <html lang="en">
