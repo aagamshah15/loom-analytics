@@ -67,12 +67,12 @@ PROMPT_STOP_WORDS = {
 }
 
 SECTION_CONFIG = {
-    "overview": "Narrative KPI and standout findings",
-    "revenue": "Monthly revenue and AOV timing",
-    "returns": "Return behavior by category and payment",
-    "channels": "Channel and device performance",
-    "discounts": "Discount efficiency section",
-    "notes": "Approved insight notes section",
+    "overview": "KPI cards and key insights",
+    "revenue": "Charts: revenue",
+    "returns": "Charts: returns",
+    "channels": "Charts: channels and devices",
+    "discounts": "Charts: discounts",
+    "notes": "Insight notes",
 }
 
 

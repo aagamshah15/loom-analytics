@@ -202,7 +202,7 @@ function App() {
         Object.fromEntries(response.review.insights.map((insight) => [insight.id, Boolean(insight.recommended)]))
       );
       setUserPrompt("");
-      setDashboardTitle(defaultDashboardTitle(kind));
+      setDashboardTitle(response.business_context?.default_title ?? "Business Dashboard");
       setDashboardSubtitle(
         response.business_context
           ? `Approved insight blueprint for ${response.business_context.display_name}`
@@ -381,7 +381,7 @@ function App() {
 
       {step === "builder" && draftBlueprint ? (
         <DashboardBuilder
-          availableSections={sectionLabelMapForKind(draftBlueprint.kind, templateOptions, businessContext?.analysis ?? null)}
+          availableSections={businessContext?.sections ?? {}}
           blueprint={draftBlueprint}
           isSyncingPreview={isSyncingPreview}
           maxMetricCount={maxMetricCount}
@@ -461,207 +461,9 @@ function UnsupportedTemplateState({ onRestart }: { onRestart: () => void }) {
   );
 }
 
-function defaultDashboardTitle(kind: string): string {
-  if (kind === "financial_timeseries") {
-    return "Hidden Market Structure";
-  }
-  if (kind === "ecommerce_orders") {
-    return "E-commerce Hidden Insights";
-  }
-  if (kind === "healthcare_medical") {
-    return "Healthcare Hidden Insights";
-  }
-  if (kind === "marketing_campaign") {
-    return "Marketing Hidden Insights";
-  }
-  if (kind === "hr_workforce") {
-    return "HR Workforce Hidden Insights";
-  }
-  if (kind === "survey_sentiment") {
-    return "Survey Sentiment Hidden Insights";
-  }
-  if (kind === "web_app_analytics") {
-    return "Web Analytics Hidden Insights";
-  }
-  return "Business Dashboard";
-}
-
 function defaultSectionsForReview(insights: AnalyzeResponse["review"]["insights"]): string[] {
   const sections = insights.map((insight) => insight.section);
   return Array.from(new Set(["overview", ...sections]));
-}
-
-function sectionLabelMapForKind(
-  kind: string,
-  options: AnalyzeResponse["template_options"],
-  analysis: Record<string, unknown> | null = null
-): Record<string, string> {
-  if (kind === "financial_timeseries") {
-    return {
-      overview: "KPI cards and key insights",
-      seasonality: "Charts: calendar patterns",
-      volatility: "Charts: volatility",
-      gaps: "Charts: overnight gaps",
-      volume: "Charts: trading volume",
-      data_notes: "Insight notes",
-    };
-  }
-
-  if (kind === "ecommerce_orders") {
-    return {
-      overview: "KPI cards and key insights",
-      revenue: "Charts: revenue",
-      returns: "Charts: returns",
-      channels: "Charts: channels and devices",
-      discounts: "Charts: discounts",
-      notes: "Insight notes",
-    };
-  }
-
-  if (kind === "healthcare_medical") {
-    const profile = typeof analysis?.profile === "string" ? analysis.profile : "outcomes";
-    if (profile === "admissions") {
-      return {
-        overview: "KPI cards and key insights",
-        utilization: "Charts: admissions and length of stay",
-        diagnoses: "Charts: condition patterns",
-        billing: "Charts: billing and payer mix",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "insurance_risk") {
-      return {
-        overview: "KPI cards and key insights",
-        risk_factors: "Charts: smoking and BMI risk",
-        demographics: "Charts: age, gender, and family mix",
-        pricing: "Charts: regional and pricing spread",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "claims_fraud") {
-      return {
-        overview: "KPI cards and key insights",
-        fraud: "Charts: fraud concentration",
-        providers: "Charts: provider review",
-        billing: "Charts: billing and payer friction",
-        utilization: "Charts: diagnosis and procedure signals",
-        notes: "Insight notes",
-      };
-    }
-    return {
-      overview: "KPI cards and key insights",
-      adherence: "Charts: adherence and outcomes",
-      care_delivery: "Charts: telehealth and follow-up",
-      equity: "Charts: equity",
-      costs: "Charts: costs and support risk",
-      notes: "Insight notes",
-    };
-  }
-
-  if (kind === "marketing_campaign") {
-    const profile = typeof analysis?.profile === "string" ? analysis.profile : "attribution";
-    if (profile === "crm") {
-      return {
-        overview: "KPI cards and key insights",
-        offers: "Charts: offer response patterns",
-        customers: "Charts: customer value and intent",
-        segments: "Charts: household and income segments",
-        retention: "Charts: recency and campaign fatigue",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "lead_generation") {
-      return {
-        overview: "KPI cards and key insights",
-        acquisition: "Charts: lead source mix",
-        landing_pages: "Charts: landing page concentration",
-        sources: "Charts: source quality and seasonality",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "closed_deals") {
-      return {
-        overview: "KPI cards and key insights",
-        segments: "Charts: business segment concentration",
-        revenue: "Charts: revenue quality by lead type",
-        sales_motion: "Charts: behaviour and business model quality",
-        notes: "Insight notes",
-      };
-    }
-    return {
-      overview: "KPI cards and key insights",
-      channels: "Charts: budget and ROAS by channel",
-      testing: "Charts: experiments and device ROAS",
-      audience: "Charts: audience targeting",
-      funnel: "Charts: bounce and impression leakage",
-      notes: "Insight notes",
-    };
-  }
-
-  if (kind === "hr_workforce") {
-    return {
-      overview: "KPI cards and key insights",
-      retention: "Charts: attrition and engagement",
-      compensation: "Charts: pay equity",
-      development: "Charts: training and development",
-      workforce_model: "Charts: remote risk and departments",
-      notes: "Insight notes",
-    };
-  }
-
-  if (kind === "survey_sentiment") {
-    const profile = typeof analysis?.profile === "string" ? analysis.profile : "b2b_nps";
-    if (profile === "text_sentiment") {
-      return {
-        overview: "KPI cards and key insights",
-        sources: "Charts: sentiment by source",
-        language: "Charts: sentiment distribution and text depth",
-        momentum: "Charts: time and cadence",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "satisfaction") {
-      return {
-        overview: "KPI cards and key insights",
-        experience: "Charts: experience and feature ratings",
-        channels: "Charts: promo and visit behavior",
-        loyalty: "Charts: loyalty and return intent",
-        notes: "Insight notes",
-      };
-    }
-    if (profile === "wellbeing") {
-      return {
-        overview: "KPI cards and key insights",
-        barriers: "Charts: barriers and adoption friction",
-        wellbeing: "Charts: wellbeing and discomfort signals",
-        demographics: "Charts: age and audience mix",
-        notes: "Insight notes",
-      };
-    }
-    return {
-      overview: "KPI cards and key insights",
-      stakeholders: "Charts: stakeholder sentiment gap",
-      onboarding: "Charts: onboarding and tenure",
-      effort: "Charts: effort and loyalty signals",
-      product: "Charts: product quality and complaint themes",
-      renewal: "Charts: renewal and churn risk",
-      notes: "Insight notes",
-    };
-  }
-
-  if (kind === "web_app_analytics") {
-    return {
-      overview: "KPI cards and key insights",
-      devices: "Charts: device performance and speed",
-      channels: "Charts: channel quality",
-      campaigns: "Charts: campaign efficiency",
-      content: "Charts: content and exit paths",
-      retention: "Charts: new vs returning visitors",
-      notes: "Insight notes",
-    };
-  }
-
-  return Object.fromEntries(options.filter((option) => option.implemented).map((option) => [option.kind, option.label]));
 }
 
 export default App;

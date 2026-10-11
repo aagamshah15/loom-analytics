@@ -70,8 +70,8 @@ SECTION_CONFIG = {
     "overview": "KPI cards and key insights",
     "retention": "Charts: attrition and engagement",
     "compensation": "Charts: pay equity",
-    "development": "Charts: training and performance",
-    "workforce_model": "Charts: remote risk and department hotspots",
+    "development": "Charts: training and development",
+    "workforce_model": "Charts: remote risk and departments",
     "notes": "Insight notes",
 }
 

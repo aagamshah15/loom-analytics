@@ -66,36 +66,33 @@ def detect_business_context(context: PipelineContext) -> Optional[dict[str, Any]
     for kind, display_name, confidence, analyze in _TEMPLATES:
         analysis = _try_analyze(kind, analyze, context)
         if analysis is not None:
-            return {
-                "kind": kind,
-                "analysis": analysis,
-                "display_name": display_name,
-                "confidence": confidence,
-            }
+            return _business_context(kind, display_name, confidence, analysis)
     return None
 
 
 def analyze_for_kind(context: PipelineContext, kind: str) -> Optional[dict[str, Any]]:
     if kind == "generic":
-        return {
-            "kind": "generic",
-            "analysis": {},
-            "display_name": "Generic CSV",
-            "confidence": 0.5,
-        }
+        return _business_context("generic", "Generic CSV", 0.5, {})
     for template_kind, display_name, confidence, analyze in _TEMPLATES:
         if template_kind != kind:
             continue
         analysis = _try_analyze(kind, analyze, context)
         if analysis is None:
             return None
-        return {
-            "kind": kind,
-            "analysis": analysis,
-            "display_name": display_name,
-            "confidence": confidence,
-        }
+        return _business_context(kind, display_name, confidence, analysis)
     return None
+
+
+def _business_context(kind: str, display_name: str, confidence: float, analysis: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "analysis": analysis,
+        "display_name": display_name,
+        "confidence": confidence,
+        # What the UI needs to label the builder, so it does not keep its own copy.
+        "sections": section_options(kind, analysis),
+        "default_title": default_dashboard_title(kind),
+    }
 
 
 def _try_analyze(
@@ -191,19 +188,21 @@ def build_dashboard(
     return None
 
 
-def section_options(kind: str) -> dict[str, str]:
+def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    """Section ids and labels for a template. Pass the analysis to get the sections of its profile."""
+    profile = (analysis or {}).get("profile")
     if kind == "financial_timeseries":
         return financial_section_options()
     if kind == "ecommerce_orders":
         return ecommerce_section_options()
     if kind == "healthcare_medical":
-        return healthcare_section_options()
+        return healthcare_section_options(profile)
     if kind == "marketing_campaign":
-        return marketing_section_options()
+        return marketing_section_options(profile)
     if kind == "hr_workforce":
         return hr_section_options()
     if kind == "survey_sentiment":
-        return survey_section_options()
+        return survey_section_options(profile)
     if kind == "web_app_analytics":
         return web_analytics_section_options()
     return {}

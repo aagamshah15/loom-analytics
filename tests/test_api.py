@@ -128,6 +128,17 @@ class ApiTests(unittest.TestCase):
         self.assertGreater(len(payload["blueprint"]["layout_sections"]), 0)
         self.assertIn("html", payload)
 
+    def test_analyze_returns_profile_sections_and_default_title(self) -> None:
+        response = self._post_fixture("marketing/happy_path.csv")
+        self.assertEqual(response.status_code, 200)
+        business_context = response.json()["business_context"]
+        self.assertEqual(business_context["analysis"]["profile"], "crm")
+        self.assertEqual(
+            list(business_context["sections"]),
+            ["overview", "offers", "customers", "segments", "retention", "notes"],
+        )
+        self.assertEqual(business_context["default_title"], "Marketing Hidden Insights")
+
     def test_template_override_success_and_failure_paths(self) -> None:
         success = self._post_fixture("ecommerce/happy_path.csv", template_override="ecommerce_orders")
         self.assertEqual(success.status_code, 200)

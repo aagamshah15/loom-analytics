@@ -59,7 +59,8 @@ class TemplateContractTests(unittest.TestCase):
                 self.assertGreater(len(insights["insights"]), 0, f"{entry['path']} should produce insight candidates")
 
                 approved_ids = [item["id"] for item in insights["insights"][:3]]
-                included_sections = list(section_options(entry["expected_kind"]).keys())[:4]
+                profile_sections = section_options(entry["expected_kind"], analysis_payload["analysis"])
+                included_sections = list(profile_sections.keys())[:4]
                 dashboard = build_dashboard(
                     entry["expected_kind"],
                     analysis_payload["analysis"],
@@ -77,7 +78,9 @@ class TemplateContractTests(unittest.TestCase):
                 blueprint = dashboard.get("blueprint", {})
                 layout_sections = blueprint.get("layout_sections", [])
                 self.assertGreater(len(layout_sections), 0, f"{entry['path']} should yield blueprint sections")
-                allowed_section_ids = set(section_options(entry["expected_kind"]).keys())
+                self.assertEqual(analysis_payload["sections"], profile_sections)
+                self.assertEqual([section["id"] for section in layout_sections], included_sections)
+                allowed_section_ids = set(profile_sections.keys())
                 self.assertTrue(
                     set(section["id"] for section in layout_sections).issubset(allowed_section_ids),
                     f"{entry['path']} produced unexpected section ids",

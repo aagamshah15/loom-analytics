@@ -247,7 +247,7 @@ def _render_business_workflow(result: dict, run_id: str) -> None:
     metric_count_key = f"{run_id}_dash_metric_count"
     show_notes_key = f"{run_id}_dash_show_notes"
 
-    domain_section_options = section_options(kind)
+    domain_section_options = section_options(kind, analysis)
     default_sections = list(domain_section_options.keys())
     if title_key not in st.session_state:
         st.session_state[title_key] = default_dashboard_title(kind)

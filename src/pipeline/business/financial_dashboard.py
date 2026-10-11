@@ -64,12 +64,12 @@ PROMPT_STOP_WORDS = {
 }
 
 SECTION_CONFIG = {
-    "overview": "Narrative headline cards",
-    "seasonality": "Weekday and month pattern section",
-    "volatility": "Drawdown and volatility regime section",
-    "gaps": "Overnight gap behavior section",
-    "volume": "Extreme volume section",
-    "data_notes": "Approved insight notes section",
+    "overview": "KPI cards and key insights",
+    "seasonality": "Charts: calendar patterns",
+    "volatility": "Charts: volatility",
+    "gaps": "Charts: overnight gaps",
+    "volume": "Charts: trading volume",
+    "data_notes": "Insight notes",
 }
 
 

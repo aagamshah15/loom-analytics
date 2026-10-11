@@ -139,8 +139,8 @@ OUTCOMES_SECTION_CONFIG = {
     "overview": "KPI cards and key insights",
     "adherence": "Charts: adherence and outcomes",
     "care_delivery": "Charts: telehealth and follow-up",
-    "equity": "Charts: equity and payer mix",
-    "costs": "Charts: cost and support risk",
+    "equity": "Charts: equity",
+    "costs": "Charts: costs and support risk",
     "notes": "Insight notes",
 }
 
@@ -162,10 +162,10 @@ INSURANCE_SECTION_CONFIG = {
 
 CLAIMS_SECTION_CONFIG = {
     "overview": "KPI cards and key insights",
-    "fraud": "Charts: fraud concentration and claim risk",
-    "providers": "Charts: provider specialty and volume patterns",
-    "billing": "Charts: claim amounts, approvals, and payer friction",
-    "utilization": "Charts: visit, diagnosis, and procedure mix",
+    "fraud": "Charts: fraud concentration",
+    "providers": "Charts: provider review",
+    "billing": "Charts: billing and payer friction",
+    "utilization": "Charts: diagnosis and procedure signals",
     "notes": "Insight notes",
 }
 

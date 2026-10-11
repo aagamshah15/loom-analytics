@@ -427,7 +427,9 @@ def build_business_dashboard(
     }
 
 
-def dashboard_section_options() -> dict[str, str]:
+def dashboard_section_options(profile: Optional[str] = None) -> dict[str, str]:
+    if profile is not None:
+        return _section_config_for_profile(profile)
     merged: dict[str, str] = {}
     for config in (
         B2B_SECTION_CONFIG,

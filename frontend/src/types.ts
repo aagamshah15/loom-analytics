@@ -10,6 +10,8 @@ export type BusinessContext = {
   display_name: string;
   confidence: number;
   analysis: Record<string, unknown>;
+  sections: Record<string, string>;
+  default_title: string;
 };
 
 export type InsightCandidate = {
