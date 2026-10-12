@@ -5,8 +5,16 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, script_json, template_frame
-from pipeline.business.matching import detect_columns
+from pipeline.business.common import collect_insights, html_template, render_blueprint_html, script_json, template_frame
+from pipeline.business.matching import detect_columns, normalize_name
+from pipeline.business.outcome_profile import (
+    SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
+    analyze_outcome,
+    build_outcome_insight_candidates,
+    build_outcome_layout,
+    context_support,
+    detect_outcome,
+)
 from pipeline.common.contracts import PipelineContext
 
 
@@ -181,7 +189,78 @@ def analyze_healthcare_context(context: PipelineContext) -> Optional[dict[str, A
         or _analyze_admissions_context(df)
         or _analyze_insurance_context(df)
         or _analyze_claims_context(df)
+        or _analyze_encounters_context(df)
     )
+
+
+# --- Encounters: any patient-level file with a yes/no outcome, whatever its other columns ---
+
+# Tried in order. Each entry: the column names, how its values read, and how to describe it.
+ENCOUNTER_OUTCOMES = [
+    {
+        "aliases": ["readmitted", "readmission", "is_readmitted", "readmit_flag", "readmitted_30d"],
+        "positives": {"<30", ">30", "readmitted"},
+        "negatives": {"not readmitted"},
+        "vocabulary": {"rate_label": "Readmission rate", "positive": "readmitted", "unit": "encounters"},
+    },
+    {
+        "aliases": ["no_show", "missed_appointment", "noshow_flag"],
+        "positives": {"missed"},
+        "negatives": {"attended", "showed"},
+        "vocabulary": {"rate_label": "No-show rate", "positive": "missed", "unit": "appointments"},
+    },
+    {
+        "aliases": ["died", "death", "mortality", "deceased", "expired", "hospital_death"],
+        "positives": {"died", "dead", "deceased", "expired"},
+        "negatives": {"alive", "survived"},
+        "vocabulary": {"rate_label": "Mortality rate", "positive": "fatal", "unit": "cases"},
+    },
+    {
+        "aliases": ["result", "test_result", "test_results"],
+        "positives": {"positive", "detected", "abnormal"},
+        "negatives": {"negative", "not detected", "normal"},
+        "vocabulary": {"rate_label": "Positive rate", "positive": "positive", "unit": "tests"},
+        "support": 3,  # "result" is a common column name outside healthcare
+    },
+]
+STAY_ALIASES = ["length_of_stay", "los", "stay", "time_in_hospital", "stay_days", "days_in_hospital"]
+STAY_VOCABULARY = {"rate_label": "Extended-stay rate", "positive": "extended-stay", "unit": "admissions"}
+
+# Words in other column names that mark the rows as patients or visits.
+CLINICAL_WORDS = (
+    "patient", "diag", "diagnosis", "hospital", "clinic", "medication", "medical", "admission", "admit",
+    "payer", "payor", "insurance", "specialty", "procedure", "appointment", "ward", "illness", "physician",
+    "doctor", "hipertension", "hypertension", "diabetes", "subject", "lab",
+)
+
+
+def _analyze_encounters_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    found = detect_outcome(df, ENCOUNTER_OUTCOMES, CLINICAL_WORDS)
+    if found is not None:
+        column, flag, vocabulary = found
+        return analyze_outcome(df, flag, kind="healthcare_medical", profile="encounters", outcome_column=column, vocabulary=vocabulary)
+
+    # No recorded outcome: the longest quarter of stays is the one operations teams ask about.
+    names = {normalize_name(column): column for column in df.columns}
+    column = next((names[key] for key in map(normalize_name, STAY_ALIASES) if key in names), None)
+    if column is None or context_support(df.columns, CLINICAL_WORDS, exclude=column) < 2:
+        return None
+    days = _stay_days(df[column])
+    if days.notna().sum() < 0.9 * len(df) or days.nunique() < 4:
+        return None
+    threshold = float(days.quantile(0.75))
+    flag = (days > threshold).astype(float).where(days.notna())
+    if flag.nunique() < 2:
+        return None
+    vocabulary = dict(STAY_VOCABULARY, rate_label=f"Share of stays over {threshold:.0f} days")
+    return analyze_outcome(df, flag, kind="healthcare_medical", profile="encounters", outcome_column=column, vocabulary=vocabulary)
+
+
+def _stay_days(series: pd.Series) -> pd.Series:
+    """Length of stay as a number; banded values such as "11-20" count from their lower bound."""
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    return pd.to_numeric(series.astype(str).str.extract(r"(\d+)")[0], errors="coerce")
 
 
 def _analyze_outcomes_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
@@ -317,6 +396,8 @@ def _analyze_outcomes_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
 
 def build_healthcare_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     profile = analysis.get("profile", "outcomes")
+    if profile == "encounters":
+        return build_outcome_insight_candidates(analysis, user_prompt)
     if profile == "admissions":
         return _build_admissions_insight_candidates(analysis, user_prompt)
     if profile == "insurance_risk":
@@ -833,6 +914,8 @@ def dashboard_section_options(profile: Optional[str] = None) -> dict[str, str]:
 
 
 def _section_config_for_profile(profile: Optional[str]) -> dict[str, str]:
+    if profile == "encounters":
+        return OUTCOME_SECTION_CONFIG
     if profile == "admissions":
         return ADMISSIONS_SECTION_CONFIG
     if profile == "insurance_risk":
@@ -1331,6 +1414,15 @@ def _build_layout_sections(
     signals = analysis["signals"]
     summary = analysis["summary"]
     profile = analysis.get("profile", "outcomes")
+
+    if profile == "encounters":
+        return build_outcome_layout(
+            approved_insights=approved_insights,
+            metric_cards=metric_cards,
+            analysis=analysis,
+            included_sections=included_sections,
+            show_notes=show_notes,
+        )
 
     if profile == "claims_fraud":
         section_map = {
@@ -1915,6 +2007,8 @@ def _build_layout_sections(
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
+    if payload["dataset"].get("shape") == "outcome":
+        return render_blueprint_html(payload, eyebrow="Loom healthcare dashboard")
     json_payload = script_json(payload, default=_json_default)
     template = html_template(
         """

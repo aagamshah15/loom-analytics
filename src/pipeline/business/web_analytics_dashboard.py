@@ -7,6 +7,14 @@ import pandas as pd
 
 from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
 from pipeline.business.matching import detect_columns
+from pipeline.business.outcome_profile import (
+    SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
+    analyze_outcome,
+    build_outcome_insight_candidates,
+    build_outcome_layout,
+    detect_outcome,
+    is_outcome_analysis,
+)
 from pipeline.common.contracts import PipelineContext
 
 
@@ -83,7 +91,7 @@ def analyze_web_analytics_context(context: PipelineContext) -> Optional[dict[str
 
     detected = _detect_columns(df)
     if detected is None:
-        return None
+        return _analyze_sessions_context(df)
 
     working = pd.DataFrame(
         {
@@ -194,7 +202,31 @@ def analyze_web_analytics_context(context: PipelineContext) -> Optional[dict[str
     }
 
 
+# --- Sessions: one row per visit, with whether it converted (clickstream and session exports) ---
+
+SESSION_OUTCOMES = [
+    {
+        "aliases": ["revenue", "purchase", "purchased", "converted", "conversion", "transaction", "made_purchase", "order_placed"],
+        "vocabulary": {"rate_label": "Conversion rate", "positive": "converting", "unit": "sessions"},
+    },
+]
+WEB_WORDS = (
+    "bounce", "exit", "page", "pages", "session", "sessions", "visitor", "traffic", "browser", "device",
+    "referrer", "pageview", "pageviews",
+)
+
+
+def _analyze_sessions_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    found = detect_outcome(df, SESSION_OUTCOMES, WEB_WORDS)
+    if found is None:
+        return None
+    column, flag, vocabulary = found
+    return analyze_outcome(df, flag, kind="web_app_analytics", profile="sessions", outcome_column=column, vocabulary=vocabulary)
+
+
 def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
+    if is_outcome_analysis(analysis):
+        return build_outcome_insight_candidates(analysis, user_prompt)
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
     insights = collect_insights([
@@ -330,7 +362,8 @@ def build_business_dashboard(
     approved = [item for item in insights if item["id"] in approved_set] or insights[:4]
 
     settings = settings or {}
-    included_sections = settings.get("included_sections") or _default_sections(approved)
+    section_config = _section_config(analysis)
+    included_sections = settings.get("included_sections") or _default_sections(approved, section_config)
     title = settings.get("title") or "Web Analytics Hidden Insights"
     subtitle = settings.get("subtitle") or "Approved web analytics narrative"
     metric_count = int(settings.get("metric_count", 4))
@@ -355,7 +388,7 @@ def build_business_dashboard(
             approved_insights=approved,
             metric_cards=approved,
             analysis=analysis,
-            included_sections=list(SECTION_CONFIG.keys()),
+            included_sections=list(section_config.keys()),
             show_notes=True,
         ),
         "signals": analysis["signals"],
@@ -497,9 +530,13 @@ def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms
     return bonus + min(overlap, 3) * 6
 
 
-def _default_sections(insights: list[dict[str, Any]]) -> list[str]:
+def _section_config(analysis: dict[str, Any]) -> dict[str, str]:
+    return OUTCOME_SECTION_CONFIG if is_outcome_analysis(analysis) else SECTION_CONFIG
+
+
+def _default_sections(insights: list[dict[str, Any]], section_config: dict[str, str]) -> list[str]:
     sections = ["overview"]
-    for section in SECTION_CONFIG:
+    for section in section_config:
         if section == "overview":
             continue
         if any(item["section"] == section or section in item["tags"] for item in insights):
@@ -540,6 +577,14 @@ def _build_layout_sections(
     included_sections: list[str],
     show_notes: bool,
 ) -> list[dict[str, Any]]:
+    if is_outcome_analysis(analysis):
+        return build_outcome_layout(
+            approved_insights=approved_insights,
+            metric_cards=metric_cards,
+            analysis=analysis,
+            included_sections=included_sections,
+            show_notes=show_notes,
+        )
     signals = analysis["signals"]
     section_map = {
         "overview": {

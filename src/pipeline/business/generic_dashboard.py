@@ -9,6 +9,7 @@ import pandas as pd
 
 from pipeline.business.common import (
     collect_insights,
+    is_label_column_name,
     extract_prompt_terms,
     format_number,
     insight_card,
@@ -54,13 +55,6 @@ PROMPT_STOP_WORDS = {
     "more", "need", "please", "show", "story", "that", "them", "these", "this", "those", "want", "with",
 }
 
-# Numeric columns that are labels, calendar parts or coordinates, not quantities worth averaging.
-NON_MEASURE_WORD = re.compile(
-    r"(^|[^a-z])(id|ids|uuid|zip|zipcode|postal|postcode|phone|code|"
-    r"year|month|day|week|quarter|hour|lat|latitude|lon|lng|longitude)([^a-z]|$)"
-)
-CAMEL_CASE_ID = re.compile(r"(?<=[a-z])I[dD]$|ID$")
-ROW_INDEX_NAMES = {"index", "rownames", "row", "sno", "s.no", "sr no", "serial"}
 DATE_NAME = re.compile(r"date|time|timestamp|day|month|period|created|updated|when")
 
 # Earlier keywords are better candidates for the dataset's headline measure.
@@ -507,13 +501,7 @@ def _year_column(df: pd.DataFrame) -> Optional[Any]:
 
 
 def _is_non_measure_name(name: str) -> bool:
-    lowered = name.strip().lower()
-    return (
-        lowered in ROW_INDEX_NAMES
-        or lowered.startswith("unnamed")
-        or bool(NON_MEASURE_WORD.search(lowered))
-        or bool(CAMEL_CASE_ID.search(name.strip()))
-    )
+    return is_label_column_name(name)
 
 
 def _looks_like_identifier(name: str, series: pd.Series, distinct: int, rows: int) -> bool:

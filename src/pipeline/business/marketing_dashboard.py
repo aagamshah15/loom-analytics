@@ -5,8 +5,15 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, script_json, template_frame
+from pipeline.business.common import collect_insights, html_template, render_blueprint_html, script_json, template_frame
 from pipeline.business.matching import detect_columns
+from pipeline.business.outcome_profile import (
+    SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
+    analyze_outcome,
+    build_outcome_insight_candidates,
+    build_outcome_layout,
+    detect_outcome,
+)
 from pipeline.common.contracts import PipelineContext
 
 
@@ -151,7 +158,35 @@ def analyze_marketing_context(context: PipelineContext) -> Optional[dict[str, An
         or _analyze_crm_context(df)
         or _analyze_lead_context(df)
         or _analyze_deals_context(df)
+        or _analyze_conversion_context(df)
     )
+
+
+# --- Conversion: one row per person reached, with whether they converted (A/B tests, outreach lists) ---
+
+CONVERSION_OUTCOMES = [
+    {
+        "aliases": ["converted", "conversion", "is_converted", "purchased", "responded", "subscribed", "signed_up"],
+        "vocabulary": {"rate_label": "Conversion rate", "positive": "converted", "unit": "users"},
+    },
+    {
+        "aliases": ["y", "deposit", "outcome"],
+        "vocabulary": {"rate_label": "Response rate", "positive": "responding", "unit": "contacts"},
+        "support": 3,  # single-letter and generic names need more around them
+    },
+]
+MARKETING_WORDS = (
+    "campaign", "ad", "ads", "group", "variant", "experiment", "channel", "impression", "impressions",
+    "landing", "creative", "audience", "contact", "offer", "promo", "poutcome", "pdays",
+)
+
+
+def _analyze_conversion_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    found = detect_outcome(df, CONVERSION_OUTCOMES, MARKETING_WORDS)
+    if found is None:
+        return None
+    column, flag, vocabulary = found
+    return analyze_outcome(df, flag, kind="marketing_campaign", profile="conversion", outcome_column=column, vocabulary=vocabulary)
 
 
 def _analyze_attribution_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
@@ -504,6 +539,8 @@ def _analyze_deals_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
 
 def build_marketing_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     profile = analysis.get("profile", "attribution")
+    if profile == "conversion":
+        return build_outcome_insight_candidates(analysis, user_prompt)
     if profile == "crm":
         return _build_crm_insights(analysis, user_prompt)
     if profile == "lead_generation":
@@ -908,6 +945,8 @@ def dashboard_section_options(profile: Optional[str] = None) -> dict[str, str]:
 
 
 def _section_config_for_profile(profile: Optional[str]) -> dict[str, str]:
+    if profile == "conversion":
+        return OUTCOME_SECTION_CONFIG
     if profile == "crm":
         return CRM_SECTION_CONFIG
     if profile == "lead_generation":
@@ -1051,6 +1090,14 @@ def _build_layout_sections(
     show_notes: bool,
 ) -> list[dict[str, Any]]:
     profile = analysis.get("profile", "attribution")
+    if profile == "conversion":
+        return build_outcome_layout(
+            approved_insights=approved_insights,
+            metric_cards=metric_cards,
+            analysis=analysis,
+            included_sections=included_sections,
+            show_notes=show_notes,
+        )
     signals = analysis["signals"]
     summary = analysis["summary"]
 
@@ -1248,6 +1295,8 @@ def _build_layout_sections(
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
+    if payload["dataset"].get("shape") == "outcome":
+        return render_blueprint_html(payload, eyebrow="Loom marketing dashboard")
     json_payload = script_json(payload, default=_json_default)
     template = html_template(
         """

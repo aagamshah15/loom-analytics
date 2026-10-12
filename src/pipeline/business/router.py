@@ -61,6 +61,7 @@ from pipeline.business.financial_dashboard import (
     dashboard_section_options as financial_section_options,
 )
 from pipeline.business.matching import AliasTable, match_aliases
+from pipeline.business.outcome_profile import is_outcome_analysis, outcome_section_options
 from pipeline.common.contracts import PipelineContext
 
 logger = logging.getLogger(__name__)
@@ -186,8 +187,16 @@ def _business_context(kind: str, display_name: str, confidence: float, analysis:
         "sections": section_options(kind, analysis),
         "default_title": default_dashboard_title(kind),
         # Sections to switch on before the user has chosen any. None means "those the insights point at".
-        "default_sections": list(section_options(kind, analysis)) if kind == "generic" else None,
+        "default_sections": list(section_options(kind, analysis)) if _shows_every_section(kind, analysis) else None,
     }
+
+
+def _shows_every_section(kind: str, analysis: dict[str, Any]) -> bool:
+    """Whether to switch on all available sections up front, not only those the insights point at.
+
+    True where the section list is already cut down to what the dataset can fill.
+    """
+    return kind == "generic" or is_outcome_analysis(analysis) or bool(analysis.get("dataset", {}).get("partial"))
 
 
 def _try_analyze(
@@ -294,11 +303,13 @@ def build_dashboard(
 
 def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
     """Section ids and labels for a template. Pass the analysis to get the sections of its profile."""
+    if is_outcome_analysis(analysis):
+        return outcome_section_options(analysis)
     profile = (analysis or {}).get("profile")
     if kind == "financial_timeseries":
         return financial_section_options(analysis)
     if kind == "ecommerce_orders":
-        return ecommerce_section_options()
+        return ecommerce_section_options(analysis)
     if kind == "healthcare_medical":
         return healthcare_section_options(profile)
     if kind == "marketing_campaign":
@@ -344,7 +355,7 @@ def workflow_overview(kind: str, analysis: dict[str, Any]) -> dict[str, Any]:
                 ("Date Span", f"{dataset['start_year']} - {dataset['end_year']}"),
                 ("Revenue", summary["total_revenue_display"]),
                 ("AOV", summary["avg_order_value_display"]),
-                ("Return Rate", f"{summary['return_rate']:.1f}%"),
+                ("Return Rate", "n/a" if summary["return_rate"] is None else f"{summary['return_rate']:.1f}%"),
             ],
         }
     if kind == "healthcare_medical":

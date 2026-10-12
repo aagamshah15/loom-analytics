@@ -5,27 +5,42 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, script_json
-from pipeline.business.matching import detect_columns
+from pipeline.business.common import collect_insights, html_template, prune_empty_blocks, render_blueprint_html, script_json
+from pipeline.business.matching import match_aliases
+from pipeline.business.outcome_profile import context_support
 from pipeline.common.contracts import PipelineContext
 
 
+# Sales data needs a date and an amount. Everything else adds a part of the dashboard.
 REQUIRED_COLUMN_ALIASES = {
-    "date": ["order_date", "date", "purchase_date", "transaction_date"],
-    "revenue": ["order_value", "revenue", "sales", "order_total", "total_amount", "amount"],
-    "category": ["category", "product_category", "department"],
+    "date": ["order_date", "invoice_date", "purchase_date", "transaction_date", "order_purchase_timestamp", "sale_date", "date"],
+    "revenue": ["order_value", "revenue", "sales", "order_total", "total_amount", "amount", "sales_amount", "total_price", "line_total", "total"],
+}
+
+OPTIONAL_COLUMN_ALIASES = {
+    # Line-item exports give quantity and unit price instead of an amount; together they stand in for it.
+    "quantity": ["quantity", "qty", "units", "order_quantity", "units_sold"],
+    "unit_price": ["unit_price", "price", "item_price", "price_each"],
+    "category": ["category", "product_category", "department", "product_line"],
     "channel": ["channel", "traffic_source", "source", "marketing_channel"],
     "payment": ["payment_method", "payment", "payment_type"],
     "device": ["device", "device_type"],
     "discount": ["discount_pct", "discount_percent", "discount", "discount_rate"],
     "returned": ["returned", "is_returned", "return_flag", "return_status"],
-}
-
-OPTIONAL_COLUMN_ALIASES = {
     "customer_id": ["customer_id", "customer", "user_id"],
     "customer_type": ["customer_type", "customer_segment", "buyer_type"],
-    "order_id": ["order_id", "transaction_id"],
+    "order_id": ["order_id", "transaction_id", "invoice_no", "invoice", "invoice_id", "order_number"],
+    "segment": ["segment", "market_segment"],
+    "region": ["region", "country", "state", "market"],
+    "profit": ["profit", "gross_income", "gross_profit"],
 }
+
+# A date and an amount also describe ledgers, donations and sensor logs. These words in
+# other column names mark the rows as sales.
+COMMERCE_WORDS = (
+    "order", "invoice", "customer", "product", "category", "sku", "item", "quantity", "qty", "discount",
+    "payment", "ship", "shipping", "cart", "basket", "stockcode", "returned", "price",
+)
 
 FOCUS_KEYWORDS = {
     "revenue": ["revenue", "sales", "growth", "holiday", "monthly"],
@@ -78,8 +93,8 @@ SECTION_CONFIG = {
 
 
 def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, Any]]:
-    # Template detection should preserve business-shape columns even when the
-    # cleaner drops constant categorical fields from very uniform smoke data.
+    # Read the upload itself: labels keep their casing, and sales totals must not
+    # include values the cleaner filled in.
     df = context.raw_df if context.raw_df is not None else context.clean_df
     if df is None or df.empty:
         return None
@@ -87,32 +102,57 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
     detected = _detect_columns(df)
     if detected is None:
         return None
+    fields = {**detected["optional"], **detected["required"]}
+
+    quantity = pd.to_numeric(df[fields["quantity"]], errors="coerce") if "quantity" in fields else None
+    if "revenue" in fields:
+        revenue = _money(df[fields["revenue"]])
+    elif quantity is not None and "unit_price" in fields:
+        revenue = quantity * _money(df[fields["unit_price"]])
+    else:
+        return None
+    amount_columns = {fields.get(field) for field in ("date", "revenue", "quantity", "unit_price")}
+    if context_support([column for column in df.columns if column not in amount_columns], COMMERCE_WORDS) < 2:
+        return None
+
+    def labels(field: str) -> pd.Series:
+        column = fields.get(field)
+        if column is None:
+            return pd.Series(None, index=df.index, dtype="object")
+        return df[column].map(lambda value: str(value).strip() if pd.notna(value) else None)
+
+    if "returned" in fields:
+        returned = _normalize_return_series(df[fields["returned"]])
+    elif quantity is not None and (quantity < 0).any():
+        returned = (quantity < 0).astype(float)  # negative quantities are how line-item exports record returns
+    else:
+        returned = pd.Series(float("nan"), index=df.index)
 
     working = pd.DataFrame(
         {
-            "date": pd.to_datetime(df[detected["required"]["date"]], errors="coerce"),
-            "revenue": pd.to_numeric(df[detected["required"]["revenue"]], errors="coerce"),
-            "category": df[detected["required"]["category"]].astype(str).str.strip(),
-            "channel": df[detected["required"]["channel"]].astype(str).str.strip(),
-            "payment": df[detected["required"]["payment"]].astype(str).str.strip(),
-            "device": df[detected["required"]["device"]].astype(str).str.strip(),
-            "discount_pct": _normalize_discount_series(df[detected["required"]["discount"]]),
-            "returned": _normalize_return_series(df[detected["required"]["returned"]]),
+            "date": pd.to_datetime(df[fields["date"]], errors="coerce"),
+            "revenue": revenue,
+            "category": labels("category"),
+            "channel": labels("channel"),
+            "payment": labels("payment"),
+            "device": labels("device"),
+            "segment": labels("segment"),
+            "region": labels("region"),
+            "discount_pct": _normalize_discount_series(df[fields["discount"]]) if "discount" in fields else float("nan"),
+            "returned": returned,
+            "profit": _money(df[fields["profit"]]) if "profit" in fields else float("nan"),
+            "customer_id": labels("customer_id"),
+            "customer_type": labels("customer_type").str.lower(),
+            "order_id": labels("order_id"),
         }
     ).dropna(subset=["date", "revenue"])
 
-    if working.empty or len(working) < 20:
+    if len(working) < 20:
         return None
 
-    if detected["optional"].get("customer_id"):
-        working["customer_id"] = df.loc[working.index, detected["optional"]["customer_id"]].astype(str).str.strip()
-    else:
-        working["customer_id"] = None
-
-    if detected["optional"].get("customer_type"):
-        working["customer_type"] = df.loc[working.index, detected["optional"]["customer_type"]].astype(str).str.strip().str.lower()
-    else:
-        working["customer_type"] = None
+    has_returns = bool(working["returned"].notna().any())
+    has_discount = bool(working["discount_pct"].notna().any())
+    has_profit = bool(working["profit"].notna().any())
 
     working = working.sort_values("date").reset_index(drop=True)
     working["year"] = working["date"].dt.year
@@ -123,11 +163,12 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
         categories=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
         ordered=True,
     )
-    working["discount_band"] = working["discount_pct"].apply(_discount_band)
+    working["discount_band"] = working["discount_pct"].map(_discount_band, na_action="ignore")
 
     total_revenue = float(working["revenue"].sum())
-    avg_order_value = float(working["revenue"].mean())
-    overall_return_rate = float(working["returned"].mean() * 100)
+    order_count = int(working["order_id"].nunique()) if working["order_id"].notna().any() else int(len(working))
+    avg_order_value = total_revenue / order_count if order_count else 0.0
+    overall_return_rate = float(working["returned"].mean() * 100) if has_returns else None
     repeat_order_share = _repeat_order_share(working)
 
     monthly_revenue = (
@@ -149,9 +190,17 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
         .agg(order_count=("revenue", "size"), return_rate=("returned", "mean"))
         .assign(return_rate=lambda frame: frame["return_rate"] * 100)
         .sort_values("return_rate", ascending=False)
+        if has_returns
+        else pd.DataFrame(columns=["order_count", "return_rate"])
     )
     channel_aov = working.groupby("channel")["revenue"].mean().sort_values(ascending=False)
-    weekday_aov = working.groupby("weekday", observed=False)["revenue"].mean().reindex(
+    # Average order value by weekday. Line-item files are first rolled up to one row per order.
+    orders = (
+        working.groupby("order_id").agg(revenue=("revenue", "sum"), weekday=("weekday", "first"))
+        if working["order_id"].notna().any()
+        else working
+    )
+    weekday_aov = orders.groupby("weekday", observed=False)["revenue"].mean().reindex(
         ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     )
     discount_metrics = (
@@ -160,21 +209,30 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
         .assign(return_rate=lambda frame: frame["return_rate"] * 100)
         .reindex(["No discount", "1-10%", "11-20%", "21%+"])
         .fillna(0)
+        if has_discount
+        else pd.DataFrame(columns=["avg_revenue", "return_rate", "orders"])
     )
     payment_returns = (
         working.groupby("payment")["returned"].mean().mul(100).sort_values(ascending=False)
+        if has_returns
+        else pd.Series(dtype="float64")
     )
     device_mix = working["device"].value_counts(normalize=True).mul(100).sort_values(ascending=False)
     category_mix = working["category"].value_counts().sort_values(ascending=False)
 
     direct_referral_aov = channel_aov[channel_aov.index.str.lower().isin(["direct", "referral"])]
     organic_aov = channel_aov[channel_aov.index.str.lower().isin(["organic", "organic search"])]
-    best_day = weekday_aov.idxmax() if not weekday_aov.empty else "Friday"
-    worst_day = weekday_aov.idxmin() if not weekday_aov.empty else "Sunday"
-    best_payment = payment_returns.idxmin() if not payment_returns.empty else "BNPL"
-    worst_payment = payment_returns.idxmax() if not payment_returns.empty else "PayPal"
-    clothing_return_rate = _match_series_value(category_returns["return_rate"], "clothing")
-    discount_return_spread = float(discount_metrics["return_rate"].max() - discount_metrics["return_rate"].min())
+    weekday_known = weekday_aov.dropna()
+    best_day = weekday_known.idxmax() if not weekday_known.empty else None
+    worst_day = weekday_known.idxmin() if not weekday_known.empty else None
+
+    # What any sales file can answer, whatever its columns are called.
+    revenue_by_dimension = _revenue_by_dimension(working, total_revenue)
+    monthly_totals = working.groupby(working["date"].dt.to_period("M"))["revenue"].sum()
+    customer_revenue = working.groupby("customer_id")["revenue"].sum().sort_values(ascending=False)
+    top_customer_count = max(1, len(customer_revenue) // 10)
+    discounted = working[working["discount_pct"] > 0]
+    full_price = working[working["discount_pct"] == 0]
 
     start_date = working["date"].min()
     end_date = working["date"].max()
@@ -190,36 +248,47 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
             "start_year": int(start_date.year),
             "end_year": int(end_date.year),
             "input_columns": list(df.columns),
+            # The original export page assumes channel, payment, device, discount and return columns.
+            "partial": not all(field in fields for field in ("category", "channel", "payment", "device", "discount", "returned")),
         },
         "summary": {
             "total_revenue": total_revenue,
             "total_revenue_display": _compact_currency(total_revenue),
+            "order_count": order_count,
             "avg_order_value": avg_order_value,
             "avg_order_value_display": _currency(avg_order_value),
             "return_rate": overall_return_rate,
             "repeat_order_share": repeat_order_share,
             "best_day": best_day,
-            "best_day_aov": float(weekday_aov.max()) if not weekday_aov.empty else 0.0,
+            "best_day_aov": float(weekday_known.max()) if not weekday_known.empty else None,
             "worst_day": worst_day,
-            "worst_day_aov": float(weekday_aov.min()) if not weekday_aov.empty else 0.0,
+            "worst_day_aov": float(weekday_known.min()) if not weekday_known.empty else None,
             "direct_referral_aov": float(direct_referral_aov.mean()) if not direct_referral_aov.empty else None,
             "organic_aov": float(organic_aov.mean()) if not organic_aov.empty else None,
-            "best_payment": best_payment,
+            "best_payment": payment_returns.idxmin() if not payment_returns.empty else None,
             "best_payment_return": float(payment_returns.min()) if not payment_returns.empty else None,
-            "worst_payment": worst_payment,
+            "worst_payment": payment_returns.idxmax() if not payment_returns.empty else None,
             "worst_payment_return": float(payment_returns.max()) if not payment_returns.empty else None,
-            "clothing_return_rate": clothing_return_rate,
-            "discount_return_spread": discount_return_spread,
+            "clothing_return_rate": _match_series_value(category_returns["return_rate"], "clothing"),
+            "discount_return_spread": float(discount_metrics["return_rate"].max() - discount_metrics["return_rate"].min())
+            if has_discount and has_returns
+            else None,
+            "top_revenue_group": revenue_by_dimension[0]["top"] if revenue_by_dimension else None,
+            "revenue_trend": _revenue_trend(monthly_totals),
+            "top_customer_share": float(customer_revenue.head(top_customer_count).sum() / total_revenue * 100)
+            if len(customer_revenue) >= 20 and total_revenue > 0
+            else None,
+            "customer_count": int(len(customer_revenue)),
+            "discounted_margin": _margin(discounted) if has_profit and has_discount else None,
+            "full_price_margin": _margin(full_price) if has_profit and has_discount else None,
+            "discounted_order_share": float(len(discounted) / len(working) * 100) if has_discount else None,
         },
         "signals": {
             "monthly_revenue": {
                 "labels": [pd.Timestamp(2000, month, 1).strftime("%b") for month in range(1, 13)],
                 "series": {
-                    str(year): [round(float(value), 2) for value in frame["revenue"].tolist()]
-                    for year, frame in {
-                        year: data.assign(revenue=lambda x: x["revenue"].fillna(0.0))
-                        for year, data in monthly_chart.items()
-                    }.items()
+                    str(year): [round(float(value), 2) for value in frame["revenue"].fillna(0.0).tolist()]
+                    for year, frame in monthly_chart.items()
                 },
             },
             "category_returns": {
@@ -251,8 +320,61 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
                 "labels": device_mix.index.tolist(),
                 "values": [round(float(value), 1) for value in device_mix.tolist()],
             },
+            "revenue_by_dimension": revenue_by_dimension,
         },
     }
+
+
+def _money(series: pd.Series) -> pd.Series:
+    """Amounts as numbers; exports often write them as "$1,234.50"."""
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    return pd.to_numeric(series.astype(str).str.replace(r"[^0-9.\-]", "", regex=True), errors="coerce")
+
+
+def _revenue_by_dimension(working: pd.DataFrame, total_revenue: float) -> list[dict[str, Any]]:
+    """Revenue split by each grouping the file has, most concentrated first."""
+    tables = []
+    for column, title in (("category", "category"), ("segment", "segment"), ("region", "region"), ("channel", "channel")):
+        grouped = working.groupby(column)["revenue"].sum().sort_values(ascending=False)
+        if len(grouped) < 2 or total_revenue <= 0:
+            continue
+        tables.append(
+            {
+                "column": title,
+                "labels": [str(label) for label in grouped.index.tolist()[:8]],
+                "values": [round(float(value), 2) for value in grouped.tolist()[:8]],
+                "top": {
+                    "column": title,
+                    "label": str(grouped.index[0]),
+                    "share": float(grouped.iloc[0] / total_revenue * 100),
+                    "groups": int(len(grouped)),
+                },
+            }
+        )
+    return tables
+
+
+def _revenue_trend(monthly_totals: pd.Series) -> Optional[dict[str, Any]]:
+    """Revenue in the latest three months against the first three, when there is at least half a year."""
+    if len(monthly_totals) < 6:
+        return None
+    first, last = float(monthly_totals.iloc[:3].mean()), float(monthly_totals.iloc[-3:].mean())
+    if first <= 0:
+        return None
+    return {
+        "first": first,
+        "last": last,
+        "change_pct": (last / first - 1) * 100,
+        "months": int(len(monthly_totals)),
+        "first_label": str(monthly_totals.index[0]),
+        "last_label": str(monthly_totals.index[-1]),
+    }
+
+
+def _margin(rows: pd.DataFrame) -> Optional[float]:
+    revenue = float(rows["revenue"].sum())
+    return float(rows["profit"].sum() / revenue * 100) if revenue > 0 else None
 
 
 def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
@@ -260,6 +382,8 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
     summary = analysis["summary"]
     dataset = analysis["dataset"]
     signals = analysis["signals"]
+    top_group = summary["top_revenue_group"]
+    trend = summary["revenue_trend"]
 
     insights = collect_insights([
         lambda: {
@@ -279,7 +403,7 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
         },
         lambda: {
             "id": "friday_effect",
-            "title": "Late-week shoppers are worth more",
+            "title": f"{summary['best_day']} orders are worth the most",
             "category": "revenue",
             "severity": "medium",
             "summary": f"{summary['best_day']} has the highest average order value at {_currency(summary['best_day_aov'])}.",
@@ -360,6 +484,89 @@ def build_ecommerce_insight_candidates(analysis: dict[str, Any], user_prompt: st
             "priority": 78,
             "condition": summary["repeat_order_share"] is not None,
         },
+        lambda: {
+            "id": "discount_margin_cost",
+            "title": "Discounted orders earn a much thinner margin",
+            "category": "discounts",
+            "severity": "high",
+            "summary": (
+                f"Discounted orders keep {summary['discounted_margin']:.1f}% of revenue as profit, versus "
+                f"{summary['full_price_margin']:.1f}% at full price. {summary['discounted_order_share']:.0f}% of orders carry a discount."
+            ),
+            "detail": "If discounts are not bringing in orders that would otherwise be lost, this is margin given away.",
+            "metric_label": "Margin: discounted vs full price",
+            "metric_value": f"{summary['discounted_margin']:.1f}% vs {summary['full_price_margin']:.1f}%",
+            "metric_sub": "profit as a share of revenue",
+            "tags": ["discounts", "revenue"],
+            "section": "discounts",
+            "priority": 96,
+            "condition": summary["full_price_margin"] - summary["discounted_margin"] >= 5,
+        },
+        lambda: {
+            "id": "revenue_concentration",
+            "title": f"{top_group['label']} brings in {top_group['share']:.0f}% of revenue",
+            "category": "revenue",
+            "severity": "medium",
+            "summary": (
+                f"One {top_group['column']}, {top_group['label']}, accounts for {top_group['share']:.0f}% of revenue "
+                f"across {top_group['groups']} {top_group['column']} groups."
+            ),
+            "detail": "Totals for the business mostly describe this group. Its trend and margin deserve separate attention.",
+            "metric_label": f"Top {top_group['column']} share",
+            "metric_value": f"{top_group['share']:.0f}%",
+            "metric_sub": top_group["label"],
+            "tags": ["revenue"],
+            "section": "revenue",
+            "priority": 91,
+            "condition": top_group["share"] >= 30,
+        },
+        lambda: {
+            "id": "revenue_trend",
+            "title": f"Monthly revenue is {'up' if trend['change_pct'] > 0 else 'down'} {abs(trend['change_pct']):.0f}% over the period",
+            "category": "revenue",
+            "severity": "high" if trend["change_pct"] < 0 else "medium",
+            "summary": (
+                f"The latest three months average {_compact_currency(trend['last'])} a month, versus "
+                f"{_compact_currency(trend['first'])} in the first three ({trend['first_label']} to {trend['last_label']})."
+            ),
+            "detail": "Compare the same months a year apart before reading this as growth: seasonality can produce the same shape.",
+            "metric_label": "Revenue change",
+            "metric_value": f"{trend['change_pct']:+.0f}%",
+            "metric_sub": f"over {trend['months']} months",
+            "tags": ["revenue"],
+            "section": "revenue",
+            "priority": 93,
+            "condition": abs(trend["change_pct"]) >= 10,
+        },
+        lambda: {
+            "id": "customer_concentration",
+            "title": f"The top tenth of customers bring in {summary['top_customer_share']:.0f}% of revenue",
+            "category": "customers",
+            "severity": "medium",
+            "summary": f"Of {summary['customer_count']:,} customers, the top 10% by spend account for {summary['top_customer_share']:.0f}% of revenue.",
+            "detail": "Losing a few of them would show up in the totals. Know who they are and what they buy.",
+            "metric_label": "Top 10% customer share",
+            "metric_value": f"{summary['top_customer_share']:.0f}%",
+            "metric_sub": f"of {summary['customer_count']:,} customers",
+            "tags": ["customers", "revenue"],
+            "section": "revenue",
+            "priority": 89,
+            "condition": summary["top_customer_share"] >= 30,
+        },
+        lambda: {
+            "id": "sales_overview",
+            "title": f"{summary['total_revenue_display']} in revenue across {summary['order_count']:,} orders",
+            "category": "revenue",
+            "severity": "low",
+            "summary": f"Average order value is {summary['avg_order_value_display']}, from {dataset['start_year']} to {dataset['end_year']}.",
+            "detail": "The baseline for every comparison on this dashboard.",
+            "metric_label": "Average order value",
+            "metric_value": summary["avg_order_value_display"],
+            "metric_sub": f"{summary['order_count']:,} orders",
+            "tags": ["revenue"],
+            "section": "revenue",
+            "priority": 84,
+        },
     ])
 
     filtered = [item for item in insights if item.get("condition", True)]
@@ -392,7 +599,12 @@ def build_business_dashboard(
     approved = [item for item in insights if item["id"] in approved_set] or insights[:4]
 
     settings = settings or {}
-    included_sections = settings.get("included_sections") or _default_sections(approved)
+    available_sections = dashboard_section_options(analysis)
+    included_sections = [
+        section
+        for section in (settings.get("included_sections") or _default_sections(approved))
+        if section in available_sections
+    ]
     title = settings.get("title") or "E-commerce Hidden Insights"
     subtitle = settings.get("subtitle") or (
         f"Approved insight blueprint across {analysis['dataset']['start_year']} to {analysis['dataset']['end_year']}"
@@ -484,12 +696,30 @@ def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms
     return bonus + min(overlap, 3) * 6
 
 
-def dashboard_section_options() -> dict[str, str]:
-    return SECTION_CONFIG
+def dashboard_section_options(analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    """Sections this dataset can fill. Without an analysis, every section the template knows."""
+    if not analysis:
+        return SECTION_CONFIG
+    filled = _build_layout_sections(
+        approved_insights=[],
+        metric_cards=[],
+        analysis=analysis,
+        included_sections=list(SECTION_CONFIG),
+        show_notes=True,
+    )
+    available = {section["id"] for section in filled} | {"overview", "notes"}
+    return {section: label for section, label in SECTION_CONFIG.items() if section in available}
 
 
 def _detect_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:
-    return detect_columns(df, REQUIRED_COLUMN_ALIASES, OPTIONAL_COLUMN_ALIASES)
+    required = match_aliases(df.columns, REQUIRED_COLUMN_ALIASES)
+    optional = match_aliases(df.columns, OPTIONAL_COLUMN_ALIASES)
+    missing = set(required.missing)
+    if missing == {"revenue"} and {"quantity", "unit_price"} <= optional.matched.keys():
+        missing = set()
+    if missing:
+        return None
+    return {"required": required.matched, "optional": optional.matched}
 
 
 def _normalize_discount_series(series: pd.Series) -> pd.Series:
@@ -529,9 +759,14 @@ def _repeat_order_share(df: pd.DataFrame) -> Optional[float]:
         if repeat_mask.any():
             return float(repeat_mask.mean() * 100)
     if "customer_id" in df.columns and df["customer_id"].notna().any():
-        counts = df.groupby("customer_id").size()
+        known = df[df["customer_id"].notna()]
+        if known["order_id"].notna().any():
+            # Line-item files repeat the customer on every line; count distinct orders instead.
+            counts = known.groupby("customer_id")["order_id"].nunique()
+        else:
+            counts = known.groupby("customer_id").size()
         repeat_ids = set(counts[counts > 1].index)
-        return float(df["customer_id"].isin(repeat_ids).mean() * 100)
+        return float(known["customer_id"].isin(repeat_ids).mean() * 100)
     return None
 
 
@@ -775,7 +1010,9 @@ def _build_layout_sections(
                         {"label": "Discount return spread", "value": f"{summary['discount_return_spread']:.2f} pts", "tone": "warning"},
                         {"label": "Best weekday AOV", "value": _currency(summary["best_day_aov"]), "tone": "positive"},
                         {"label": "Worst weekday AOV", "value": _currency(summary["worst_day_aov"]), "tone": "default"},
-                    ],
+                    ]
+                    if summary["discount_return_spread"] is not None
+                    else [],
                 },
             ],
         },
@@ -793,6 +1030,23 @@ def _build_layout_sections(
         },
     }
 
+    section_map["revenue"]["blocks"].extend(
+        {
+            "id": f"revenue-by-{table['column']}",
+            "kind": "chart",
+            "chart": {
+                "id": f"revenue-by-{table['column']}",
+                "title": f"Revenue by {table['column']}",
+                "subtitle": "Total revenue for the largest groups.",
+                "type": "bar",
+                "labels": table["labels"],
+                "series": [{"name": "Revenue", "values": table["values"], "color": "#0f766e"}],
+                "format": "currency",
+            },
+        }
+        for table in signals["revenue_by_dimension"]
+    )
+
     layout_sections: list[dict[str, Any]] = []
     for section_id in included_sections:
         if section_id == "notes" and not show_notes:
@@ -800,7 +1054,7 @@ def _build_layout_sections(
         section = section_map.get(section_id)
         if section is not None:
             layout_sections.append(section)
-    return layout_sections
+    return prune_empty_blocks(layout_sections)
 
 
 def _metric_card_from_insight(insight: dict[str, Any]) -> dict[str, Any]:
@@ -829,6 +1083,9 @@ def _insight_card(insight: dict[str, Any]) -> dict[str, Any]:
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
+    if payload["dataset"].get("partial"):
+        # The page below charts channel, payment, device, discount and return columns by name.
+        return render_blueprint_html(payload, eyebrow="Loom e-commerce dashboard")
     template = html_template(
         """
 <!DOCTYPE html>

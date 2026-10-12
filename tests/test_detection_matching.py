@@ -69,8 +69,8 @@ class DetectionTests(unittest.TestCase):
                 detected = detect_business_context(PipelineContext(clean_df=restyled, raw_df=restyled))
                 self.assertIsNotNone(detected)
                 self.assertEqual(detected["kind"], expected_kind)
-                # Every required column is found under its restyled name; the generators omit two optional ones.
-                self.assertEqual(detected["match"]["expected"] - detected["match"]["found"], 2)
+                # Every column the generator writes is recognized under its restyled name.
+                self.assertEqual(detected["match"]["found"], len(restyled.columns))
 
     def test_financial_template_accepts_series_without_volume(self) -> None:
         frame = generate_financial_fixture(rows=120).drop(columns=["Volume"])

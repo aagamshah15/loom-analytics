@@ -35,7 +35,7 @@ def scored(
         "insights": insights if dashboard else 0,
         "sections": sections if dashboard else 0,
         "has_dashboard": dashboard,
-        "nearest": corpus_eval.explain_miss(["Order Date", "Sales", "Category", "Discount"]),
+        "nearest": corpus_eval.explain_miss(["Device", "Traffic Source", "Sessions", "Notes"]),
         "issue": "",
         "sha256": "same",
     }
@@ -62,15 +62,15 @@ class CorpusEvalTests(unittest.TestCase):
         self.assertEqual(scored([], "web_app_analytics", sections=2)["outcome"], "thin")
 
     def test_explain_miss_names_the_missing_required_fields(self) -> None:
-        nearest = corpus_eval.explain_miss(["Order Date", "Sales", "Category", "Discount"])["ecommerce_orders"]
-        self.assertEqual(nearest["matched"], 4)
-        self.assertEqual(nearest["missing"], ["channel", "payment", "device", "returned"])
+        nearest = corpus_eval.explain_miss(["Device", "Traffic Source", "Sessions", "Notes"])["web_app_analytics"]
+        self.assertEqual(nearest["matched"], 3)
+        self.assertEqual(nearest["missing"], ["page", "conversions", "bounce_rate", "load_time"])
 
     def test_scorecard_rates_and_baseline_diff(self) -> None:
         results = [
             scored(["hr_workforce"], "hr_workforce"),
             scored(["hr_workforce"], None),
-            scored(["ecommerce_orders"], None, dashboard=False),
+            scored(["web_app_analytics"], None, dashboard=False),
             scored(["generic"], None),
             scored(["generic"], "ecommerce_orders"),
             scored(["survey_sentiment"], None, dashboard=False, outcome="unreadable"),
@@ -83,7 +83,7 @@ class CorpusEvalTests(unittest.TestCase):
         self.assertEqual(rates["wrong_template"]["count"], 1)
         self.assertEqual(rates["dashboard_output"], {"count": 4, "of": 5, "pct": 80.0})
         self.assertEqual(scorecard["per_kind"]["ecommerce_orders"]["false_positives"], 1)
-        self.assertEqual(scorecard["missing_fields"]["ecommerce_orders"]["channel"], 1)
+        self.assertEqual(scorecard["missing_fields"]["web_app_analytics"]["page"], 1)
         self.assertIn("k-web-ab-data", corpus_eval.render_markdown(scorecard))
 
         improved = [dict(item) for item in results]
