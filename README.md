@@ -186,6 +186,17 @@ make smoke-prod
 make test-stress
 ```
 
+Detection corpus (real-world CSVs, kept outside the repo):
+
+```bash
+make corpus-list                 # what is in tests/corpus/manifest.yaml and what is not downloaded yet
+make corpus-fetch                # download missing files (Kaggle entries need your own API token)
+make corpus-eval                 # score detection and dashboard output, write output/corpus/scorecard.md
+make corpus-eval ARGS="--baseline path/to/earlier/scorecard.json"   # show what improved or regressed
+```
+
+Files go to `~/.cache/loom/corpus` unless `LOOM_CORPUS_DIR` is set. Each manifest entry names the template a user would expect for that file; the scorecard reports how many match, how many produce a dashboard, and any file given the wrong template.
+
 The hosted smoke runner validates:
 - Render health
 - one analyze/build pass for each implemented template
@@ -299,6 +310,7 @@ Current React workflow:
 - Streamlit remains the prototype shell
 - React/Vite + FastAPI is now the proper frontend direction
 - The business layer includes seven specialized templates: financial time-series, e-commerce, healthcare, marketing, HR/workforce, survey/sentiment, and web/app analytics
+- Each template matches on the few columns it cannot do without (a leave flag for HR, a date and an amount for sales) and adds sections for whatever else the file has
 - A CSV that matches none of them gets a general dashboard built from its own columns: distributions, segments, trends, relationships, and data quality
 - Rule-based deterministic insights are implemented now
 - LLM narration and predictive models remain post-MVP

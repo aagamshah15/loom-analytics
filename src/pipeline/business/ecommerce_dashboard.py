@@ -13,12 +13,19 @@ from pipeline.common.contracts import PipelineContext
 
 # Sales data needs a date and an amount. Everything else adds a part of the dashboard.
 REQUIRED_COLUMN_ALIASES = {
-    "date": ["order_date", "invoice_date", "purchase_date", "transaction_date", "order_purchase_timestamp", "sale_date", "date"],
-    "revenue": ["order_value", "revenue", "sales", "order_total", "total_amount", "amount", "sales_amount", "total_price", "line_total", "total"],
+    "date": [
+        "order_date", "invoice_date", "purchase_date", "transaction_date", "order_purchase_timestamp", "sale_date",
+        "created_at", "paid_at", "processed_at", "order_time", "date",
+    ],
+    "revenue": [
+        "order_value", "revenue", "sales", "order_total", "total_amount", "amount", "sales_amount", "total_price",
+        "line_total", "payment_value", "total",
+    ],
 }
 
 OPTIONAL_COLUMN_ALIASES = {
     # Line-item exports give quantity and unit price instead of an amount; together they stand in for it.
+    # A price with no quantity is taken as the amount of a one-unit line.
     "quantity": ["quantity", "qty", "units", "order_quantity", "units_sold"],
     "unit_price": ["unit_price", "price", "item_price", "price_each"],
     "category": ["category", "product_category", "department", "product_line"],
@@ -107,8 +114,9 @@ def analyze_ecommerce_context(context: PipelineContext) -> Optional[dict[str, An
     quantity = pd.to_numeric(df[fields["quantity"]], errors="coerce") if "quantity" in fields else None
     if "revenue" in fields:
         revenue = _money(df[fields["revenue"]])
-    elif quantity is not None and "unit_price" in fields:
-        revenue = quantity * _money(df[fields["unit_price"]])
+    elif "unit_price" in fields:
+        price = _money(df[fields["unit_price"]])
+        revenue = price if quantity is None else quantity * price
     else:
         return None
     amount_columns = {fields.get(field) for field in ("date", "revenue", "quantity", "unit_price")}
@@ -715,7 +723,7 @@ def _detect_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:
     required = match_aliases(df.columns, REQUIRED_COLUMN_ALIASES)
     optional = match_aliases(df.columns, OPTIONAL_COLUMN_ALIASES)
     missing = set(required.missing)
-    if missing == {"revenue"} and {"quantity", "unit_price"} <= optional.matched.keys():
+    if missing == {"revenue"} and "unit_price" in optional.matched:
         missing = set()
     if missing:
         return None

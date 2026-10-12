@@ -1181,7 +1181,9 @@ def _analyze_text_sentiment_context(df: pd.DataFrame) -> Optional[dict[str, Any]
     text_col = _match_column(normalized, ["text", "tweet", "message", "content", "review", "comment"]) or _free_text_column(working_df)
     sentiment_col = _match_column(normalized, ["sentiment", "label", "emotion", "sentimentlabel"]) or _sentiment_column(working_df)
     # Reviews usually carry a star rating instead of a sentiment label.
-    rating_col = None if sentiment_col is not None else _match_column(normalized, ["rating", "score", "stars", "star_rating", "overall_rating"])
+    rating_col = None
+    if sentiment_col is None:
+        rating_col = _match_column(normalized, ["rating", "score", "stars", "star_rating", "overall_rating", "nps", "nps_score"])
     if text_col is None or (sentiment_col is None and rating_col is None):
         return None
     if rating_col is not None and working_df[text_col].astype(str).str.len().median() < 15:
@@ -1198,7 +1200,7 @@ def _analyze_text_sentiment_context(df: pd.DataFrame) -> Optional[dict[str, Any]
             "text": working_df[text_col].astype(str).str.strip(),
             "sentiment": working_df[sentiment_col].apply(_normalize_sentiment_label)
             if sentiment_col is not None
-            else _sentiment_from_rating(working_df[rating_col]),
+            else _sentiment_from_rating(working_df[rating_col], nps="nps" in _normalize_column_name(rating_col)),
             "source": working_df[source_col].astype(str).str.strip() if source_col else "All responses",
             "time_segment": working_df[time_col].astype(str).str.strip() if time_col else "",
         }
@@ -1937,17 +1939,24 @@ def _sentiment_column(df: pd.DataFrame) -> Optional[Any]:
     return None
 
 
-def _sentiment_from_rating(series: pd.Series) -> pd.Series:
-    """Star ratings as sentiment: the top two-fifths of the scale positive, the bottom two-fifths negative."""
+def _sentiment_from_rating(series: pd.Series, nps: bool = False) -> pd.Series:
+    """Ratings as sentiment.
+
+    Star ratings: the top two-fifths of the scale positive, the bottom two-fifths
+    negative. NPS scores use their own convention: 9-10 promoters, 0-6 detractors.
+    """
     rating = pd.to_numeric(series, errors="coerce")
     top = rating.max()
     if pd.isna(top) or top > 10 or rating.min() < 0:
         return pd.Series("Unknown", index=series.index)
-    scale = 5 if top <= 5 else 10
-    share = rating / scale
     labels = pd.Series("Neutral", index=series.index)
-    labels[share >= 0.8] = "Positive"
-    labels[share <= 0.4] = "Negative"
+    if nps:
+        labels[rating >= 9] = "Positive"
+        labels[rating <= 6] = "Negative"
+    else:
+        share = rating / (5 if top <= 5 else 10)
+        labels[share >= 0.8] = "Positive"
+        labels[share <= 0.4] = "Negative"
     labels[rating.isna()] = "Unknown"
     return labels
 

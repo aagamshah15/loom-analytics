@@ -212,6 +212,23 @@ class EcommerceShapeTests(unittest.TestCase):
         self.assertAlmostEqual(summary["total_revenue"], float((frame["Quantity"] * frame["UnitPrice"]).sum()))
         self.assertEqual(summary["top_revenue_group"]["label"], "United Kingdom")
 
+    def test_store_platform_export_with_created_at_and_total(self) -> None:
+        orders = pd.DataFrame(
+            {
+                "Name": [f"#{1000 + index}" for index in range(120)],
+                "Email": [f"buyer{index % 40}@example.com" for index in range(120)],
+                "Created at": [f"2024-{1 + index % 9:02d}-{1 + index % 27:02d} 10:15:00 +0000" for index in range(120)],
+                "Total": [35.0 + (index * 13) % 220 for index in range(120)],
+                "Discount Amount": [0.0 if index % 3 else 5.0 for index in range(120)],
+                "Shipping Method": ["Standard", "Express"] * 60,
+                "Lineitem quantity": [1 + index % 3 for index in range(120)],
+                "Payment Method": ["Shopify Payments", "PayPal", "Gift Card"] * 40,
+            }
+        )
+        detected = detect(orders)
+        self.assertEqual(detected["kind"], "ecommerce_orders")
+        self.assertEqual(detected["analysis"]["column_map"]["required"], {"date": "Created at", "revenue": "Total"})
+
     def test_a_date_and_an_amount_alone_are_not_sales(self) -> None:
         ledger = pd.DataFrame(
             {
@@ -305,6 +322,22 @@ class SurveyShapeTests(unittest.TestCase):
         self.assertAlmostEqual(summary["negative_rate"], 100 / 3)  # ratings 1 and 2
         review, _ = build(detected)
         self.assertGreaterEqual(len(review["insights"]), 3)
+
+    def test_nps_export_with_comments_uses_promoter_and_detractor_bands(self) -> None:
+        responses = pd.DataFrame(
+            {
+                "Response ID": range(200),
+                "Date": pd.date_range("2024-01-01", periods=200).astype(str),
+                "Segment": ["Enterprise", "Mid-market", "SMB", "Startup"] * 50,
+                "NPS Score": [10, 9, 8, 7, 6, 3, 0, 9, 10, 5] * 20,
+                "Comment": [f"The onboarding took longer than we expected, response {index}" for index in range(200)],
+            }
+        )
+        detected = detect(responses)
+        self.assertEqual((detected["kind"], detected["analysis"]["profile"]), ("survey_sentiment", "text_sentiment"))
+        summary = detected["analysis"]["summary"]
+        self.assertAlmostEqual(summary["positive_rate"], 40.0)  # 9s and 10s
+        self.assertAlmostEqual(summary["negative_rate"], 40.0)  # 0 to 6
 
     def test_sentiment_column_is_found_by_its_values_not_just_its_name(self) -> None:
         detected = detect(airline_tweets())
