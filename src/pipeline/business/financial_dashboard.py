@@ -7,7 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from pipeline.business.common import collect_insights, html_template, script_json, template_frame
-from pipeline.business.matching import detect_columns
+from pipeline.business.matching import detect_columns, normalize_name
 from pipeline.common.contracts import PipelineContext
 
 
@@ -16,11 +16,12 @@ REQUIRED_COLUMN_ALIASES = {
     "open": ["open"],
     "high": ["high"],
     "low": ["low"],
-    "close": ["close", "close/last", "close last", "last", "adj close", "adjusted close"],
-    "volume": ["volume"],
+    "close": ["close", "close/last", "close last", "last", "adj close", "adjusted close", "price"],
 }
 
+# Index and rate series (VIX, yields) are quoted without volume; volume-based sections drop out.
 OPTIONAL_COLUMN_ALIASES = {
+    "volume": ["volume", "vol", "shares traded"],
     "dividends": ["dividends", "dividend"],
     "stock_splits": ["stock splits", "split", "stock_splits"],
 }
@@ -79,10 +80,12 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
     if df is None or df.empty:
         return None
 
+    df = _without_ticker_prefix(df)
     detected = _detect_financial_columns(df)
     if detected is None:
         return None
 
+    volume_column = detected["optional"].get("volume")
     working = pd.DataFrame(
         {
             "date": pd.to_datetime(df[detected["required"]["date"]], errors="coerce"),
@@ -90,7 +93,7 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
             "high": _coerce_numeric_series(df[detected["required"]["high"]]),
             "low": _coerce_numeric_series(df[detected["required"]["low"]]),
             "close": _coerce_numeric_series(df[detected["required"]["close"]]),
-            "volume": _coerce_numeric_series(df[detected["required"]["volume"]]),
+            "volume": _coerce_numeric_series(df[volume_column]) if volume_column else float("nan"),
         }
     )
 
@@ -139,7 +142,8 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
         .sort_values("month_num")
     )
     decade_series = working.groupby("decade")["daily_range_pct"].mean().sort_index()
-    top_volume = working.nlargest(10, "volume").copy()
+    has_volume = bool(working["volume"].notna().any())
+    top_volume = working.dropna(subset=["volume"]).nlargest(10, "volume").copy()
     top_volume["label"] = top_volume["date"].dt.strftime("%b %Y")
 
     start_close = float(working["close"].iloc[0])
@@ -161,8 +165,9 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
     gap_down = int((working["gap_pct"] < -0.5).sum())
     flat_gap = int((working["gap_pct"].between(-0.5, 0.5, inclusive="both")).sum())
 
-    top_volume_year_span = _cluster_span_years(top_volume["date"])
-    dominant_volume_period = _dominant_volume_period(top_volume["date"])
+    # None, not a placeholder, when there is no volume: the insights built on these then drop out.
+    top_volume_year_span = _cluster_span_years(top_volume["date"]) if has_volume else None
+    dominant_volume_period = _dominant_volume_period(top_volume["date"]) if has_volume else None
 
     dataset_start = working["date"].min()
     dataset_end = working["date"].max()
@@ -237,6 +242,7 @@ def analyze_financial_context(context: PipelineContext) -> Optional[dict[str, An
             },
         },
         "optional_features": {
+            "has_volume": has_volume,
             "has_dividends": bool(detected["optional"].get("dividends")),
             "has_stock_splits": bool(detected["optional"].get("stock_splits")),
         },
@@ -466,7 +472,12 @@ def build_business_dashboard(
         approved_insights = insights[:4]
 
     settings = settings or {}
-    included_sections = settings.get("included_sections") or _default_sections(approved_insights)
+    available_sections = dashboard_section_options(analysis)
+    included_sections = [
+        section
+        for section in (settings.get("included_sections") or _default_sections(approved_insights))
+        if section in available_sections
+    ]
     title = settings.get("title") or "Hidden Market Structure"
     subtitle = settings.get("subtitle") or (
         f"Approved insight blueprint across {analysis['dataset']['start_year']} to {analysis['dataset']['end_year']}"
@@ -558,8 +569,32 @@ def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms
     return bonus + min(overlap, 3) * 6
 
 
-def dashboard_section_options() -> dict[str, str]:
+def dashboard_section_options(analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    """Sections this dataset can fill. Without an analysis, every section the template knows."""
+    if analysis and not analysis["signals"]["volume"]["labels"]:
+        return {section: label for section, label in SECTION_CONFIG.items() if section != "volume"}
     return SECTION_CONFIG
+
+
+def _without_ticker_prefix(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename "AAPL.Open", "AAPL.High", ... to "Open", "High", ... when one prefix covers the price columns.
+
+    Requiring the same prefix on open, high, low and close keeps this from firing
+    on unrelated columns that merely end in one of those words.
+    """
+    names = {normalize_name(column): column for column in df.columns}
+    for name in names:
+        if not name.endswith("open") or name == "open":
+            continue
+        prefix = name[: -len("open")]
+        if all(prefix + field in names for field in ("high", "low", "close")):
+            renames = {
+                column: normalized[len(prefix) :]
+                for normalized, column in names.items()
+                if normalized.startswith(prefix) and normalized[len(prefix) :] not in names
+            }
+            return df.rename(columns=renames)
+    return df
 
 
 def _coerce_numeric_series(series: pd.Series) -> pd.Series:
@@ -585,7 +620,7 @@ def _leading_flat_rows(df: pd.DataFrame) -> int:
             math.isclose(row["open"], row["high"], rel_tol=0, abs_tol=1e-9)
             and math.isclose(row["open"], row["low"], rel_tol=0, abs_tol=1e-9)
             and math.isclose(row["open"], row["close"], rel_tol=0, abs_tol=1e-9)
-            and float(row["volume"] or 0.0) == 0.0
+            and (pd.isna(row["volume"]) or float(row["volume"]) == 0.0)
         )
         if not is_flat:
             break
@@ -854,6 +889,8 @@ def _build_layout_sections(
     layout_sections: list[dict[str, Any]] = []
     for section_id in included_sections:
         if section_id == "data_notes" and not show_notes:
+            continue
+        if section_id == "volume" and not signals["volume"]["labels"]:
             continue
         section = section_map.get(section_id)
         if section is not None:

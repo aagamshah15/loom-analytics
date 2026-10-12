@@ -296,7 +296,7 @@ def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dic
     """Section ids and labels for a template. Pass the analysis to get the sections of its profile."""
     profile = (analysis or {}).get("profile")
     if kind == "financial_timeseries":
-        return financial_section_options()
+        return financial_section_options(analysis)
     if kind == "ecommerce_orders":
         return ecommerce_section_options()
     if kind == "healthcare_medical":

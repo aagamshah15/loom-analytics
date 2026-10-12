@@ -15,7 +15,8 @@ for path in (SRC_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(path))
 
 from pipeline.business.matching import detect_columns, match_aliases, normalize_name
-from pipeline.business.router import detect_business_context, explain_detection
+from pipeline.business.financial_dashboard import SECTION_CONFIG
+from pipeline.business.router import build_dashboard, build_insight_candidates, detect_business_context, explain_detection
 from pipeline.common.contracts import PipelineContext
 from template_generators import generate_ecommerce_fixture, generate_financial_fixture
 
@@ -67,13 +68,51 @@ class DetectionTests(unittest.TestCase):
                 detected = detect_business_context(PipelineContext(clean_df=restyled, raw_df=restyled))
                 self.assertIsNotNone(detected)
                 self.assertEqual(detected["kind"], expected_kind)
-                self.assertEqual(detected["match"]["found"], detected["match"]["expected"] - 2 if expected_kind == "ecommerce_orders" else 6)
+                # Every required column is found under its restyled name; the generators omit two optional ones.
+                self.assertEqual(detected["match"]["expected"] - detected["match"]["found"], 2)
+
+    def test_financial_template_accepts_series_without_volume(self) -> None:
+        frame = generate_financial_fixture(rows=120).drop(columns=["Volume"])
+        detected = detect_business_context(PipelineContext(clean_df=frame, raw_df=frame))
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "financial_timeseries")
+        self.assertNotIn("volume", detected["sections"])
+
+        review = build_insight_candidates("financial_timeseries", detected["analysis"], "")
+        self.assertGreaterEqual(len(review["insights"]), 3)
+        self.assertFalse([item["id"] for item in review["insights"] if item["category"] == "volume"])
+
+        dashboard = build_dashboard(
+            "financial_timeseries",
+            detected["analysis"],
+            approved_insight_ids=[item["id"] for item in review["insights"]],
+            settings={"included_sections": list(SECTION_CONFIG), "show_notes": True},
+        )
+        section_ids = [section["id"] for section in dashboard["blueprint"]["layout_sections"]]
+        self.assertNotIn("volume", section_ids)
+        self.assertIn("gaps", section_ids)
+        self.assertNotIn("highest-volume sessions", dashboard["html"])
+        self.assertIn("Gap Up", dashboard["html"])
+
+    def test_financial_template_accepts_ticker_prefixed_columns(self) -> None:
+        frame = generate_financial_fixture(rows=120)
+        prefixed = frame.rename(columns={name: f"AAPL.{name}" for name in frame.columns if name != "Date"})
+        detected = detect_business_context(PipelineContext(clean_df=prefixed, raw_df=prefixed))
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "financial_timeseries")
+        self.assertIn("volume", detected["sections"])
+
+        # A shared prefix is required: columns that merely end in "low" or "close" are not prices.
+        unrelated = pd.DataFrame(
+            {"date": pd.date_range("2024-01-01", periods=40).astype(str), "cashflow": range(40), "disclose": range(40), "reopen": range(40), "skyhigh": range(40)}
+        )
+        self.assertIsNone(detect_business_context(PipelineContext(clean_df=unrelated, raw_df=unrelated)))
 
     def test_explain_detection_ranks_the_closest_template_first(self) -> None:
-        candidates = explain_detection(["Date", "Open", "High", "Low", "Close", "Notes"])
+        candidates = explain_detection(["Date", "Open", "High", "Close", "Notes"])
         self.assertEqual(candidates[0]["kind"], "financial_timeseries")
-        self.assertEqual((candidates[0]["matched"], candidates[0]["required"]), (5, 6))
-        self.assertEqual(candidates[0]["missing"], ["volume"])
+        self.assertEqual((candidates[0]["matched"], candidates[0]["required"]), (4, 5))
+        self.assertEqual(candidates[0]["missing"], ["low"])
         self.assertEqual(len(candidates), 7)
 
         # Multi-shape templates report whichever accepted shape is closest.
@@ -88,8 +127,8 @@ class DetectionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
         self.csv = (
-            "Date,Open,High,Low,Close\n"
-            + "\n".join(f"2024-01-{day:02d},{100 + day},{102 + day},{99 + day},{101 + day}" for day in range(1, 29))
+            "Date,Open,High,Close\n"
+            + "\n".join(f"2024-01-{day:02d},{100 + day},{102 + day},{101 + day}" for day in range(1, 29))
         ).encode("utf-8")
 
     def _post(self, **data: str):
@@ -101,12 +140,12 @@ class DetectionApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["business_context"]["kind"], "generic")
         closest = payload["detection"]["candidates"][0]
-        self.assertEqual((closest["kind"], closest["missing"]), ("financial_timeseries", ["volume"]))
+        self.assertEqual((closest["kind"], closest["missing"]), ("financial_timeseries", ["low"]))
 
     def test_failed_override_says_what_is_missing(self) -> None:
         response = self._post(template_override="financial_timeseries")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("is missing: volume", response.json()["detail"])
+        self.assertIn("is missing: low", response.json()["detail"])
 
 
 if __name__ == "__main__":
