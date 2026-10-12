@@ -317,7 +317,7 @@ def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dic
     if kind == "hr_workforce":
         return hr_section_options(analysis)
     if kind == "survey_sentiment":
-        return survey_section_options(profile)
+        return survey_section_options(profile, analysis)
     if kind == "web_app_analytics":
         return web_analytics_section_options()
     if kind == "generic":

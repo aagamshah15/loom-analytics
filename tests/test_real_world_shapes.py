@@ -224,5 +224,139 @@ class EcommerceShapeTests(unittest.TestCase):
         self.assertIsNone(detect(ledger))
 
 
+def product_reviews(rows: int = 240) -> pd.DataFrame:
+    records = []
+    for index in range(rows):
+        rating = [5, 5, 4, 3, 2, 1][index % 6]
+        records.append(
+            {
+                "Clothing ID": 700 + index % 40,
+                "Age": 20 + index % 45,
+                "Review Text": f"I ordered this in my usual size and it was {'lovely' if rating >= 4 else 'a letdown'}, number {index}.",
+                "Rating": rating,
+                "Department Name": ["Tops", "Dresses", "Bottoms"][index % 3],
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def airline_tweets(rows: int = 240) -> pd.DataFrame:
+    records = []
+    for index in range(rows):
+        sentiment = ["negative", "negative", "neutral", "positive"][index % 4]
+        records.append(
+            {
+                "tweet_id": 570_000 + index,
+                "airline_sentiment": sentiment,
+                "airline_sentiment_confidence": 0.6 + (index % 4) / 10,
+                "airline": ["United", "Delta", "Southwest"][index % 3],
+                "text": f"@airline flight {index} was {'late again' if sentiment == 'negative' else 'fine today'} thanks",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def passenger_survey(rows: int = 400) -> pd.DataFrame:
+    records = []
+    for index in range(rows):
+        boarding = 1 + (index * 3) % 5
+        travel_class = ["Business", "Eco", "Eco Plus"][index % 3]
+        satisfied = boarding >= 4 and travel_class != "Eco" or index % 11 == 0
+        records.append(
+            {
+                "id": index,
+                "Customer Type": "Loyal Customer" if index % 4 else "disloyal Customer",
+                "Class": travel_class,
+                "Flight Distance": 200 + (index * 53) % 3000,
+                "Inflight wifi service": 1 + index % 5,
+                "Online boarding": boarding,
+                "Seat comfort": 1 + (index * 2) % 5,
+                "On-board service": 1 + (index * 7) % 5,
+                "satisfaction": "satisfied" if satisfied else "neutral or dissatisfied",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def form_export(rows: int = 200) -> pd.DataFrame:
+    records = []
+    for index in range(rows):
+        graduate = index % 3 == 0
+        records.append(
+            {
+                "Timestamp": f"2024-03-{1 + index % 28:02d} 10:{index % 60:02d}:00",
+                "Do you work remotely?": "Yes" if (graduate and index % 4) or index % 9 == 0 else "No",
+                "Have you asked for a raise this year?": "Yes" if index % 5 == 0 else "No",
+                "How satisfied are you with your manager?": ["Very satisfied", "Satisfied", "Neutral", "Dissatisfied"][index % 4],
+                "How often do you work overtime?": ["Never", "Rarely", "Sometimes", "Often"][(index * 3) % 4],
+                "Which benefit matters most to you?": ["Health", "Pension", "Time off"][index % 3] if index % 6 else None,
+                "Education": "Graduate degree" if graduate else "Bachelor degree",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+class SurveyShapeTests(unittest.TestCase):
+    def test_reviews_with_star_ratings_are_read_as_sentiment(self) -> None:
+        detected = detect(product_reviews())
+        self.assertEqual((detected["kind"], detected["analysis"]["profile"]), ("survey_sentiment", "text_sentiment"))
+        summary = detected["analysis"]["summary"]
+        self.assertAlmostEqual(summary["positive_rate"], 50.0)  # ratings 4 and 5
+        self.assertAlmostEqual(summary["negative_rate"], 100 / 3)  # ratings 1 and 2
+        review, _ = build(detected)
+        self.assertGreaterEqual(len(review["insights"]), 3)
+
+    def test_sentiment_column_is_found_by_its_values_not_just_its_name(self) -> None:
+        detected = detect(airline_tweets())
+        self.assertEqual(detected["analysis"]["profile"], "text_sentiment")
+        self.assertAlmostEqual(detected["analysis"]["summary"]["negative_rate"], 50.0)
+
+    def test_rating_survey_with_a_verdict_is_explained_by_its_drivers(self) -> None:
+        detected = detect(passenger_survey())
+        self.assertEqual((detected["kind"], detected["analysis"]["profile"]), ("survey_sentiment", "respondent_outcome"))
+        self.assertEqual(detected["analysis"]["outcome"]["rate_label"], "Satisfaction rate")
+        charted = [table["column"] for table in detected["analysis"]["signals"]["rate_by_dimension"]]
+        self.assertIn("Online boarding", charted)
+        review, dashboard = build(detected)
+        self.assertIn("Satisfaction rate", review["insights"][0]["title"])
+        self.assertGreaterEqual(len(dashboard["blueprint"]["layout_sections"]), 3)
+
+    def test_form_export_with_a_question_per_column(self) -> None:
+        frame = form_export()
+        # Detection runs on the cleaned upload, which fills blanks; this profile must read the original.
+        from pipeline.business.router import analyze_for_kind
+        context = PipelineContext(clean_df=frame.fillna("Health"), raw_df=frame)
+        detected = analyze_for_kind(context, "survey_sentiment")
+        self.assertEqual(detected["analysis"]["profile"], "responses")
+        self.assertEqual(list(detected["sections"]), ["overview", "agreement", "answers", "groups", "notes"])
+
+        summary = detected["analysis"]["summary"]
+        self.assertEqual(summary["question_count"], 5)
+        self.assertEqual(summary["most_skipped"]["question"], "Which benefit matters most to you?")
+        self.assertAlmostEqual(summary["most_skipped"]["skipped_pct"], 17.0)
+        self.assertEqual(summary["top_gap"]["question"], "Do you work remotely?")
+        self.assertEqual(summary["top_gap"]["label"], "Graduate degree")
+
+        review, dashboard = build(detected)
+        ids = {item["id"] for item in review["insights"]}
+        self.assertTrue({"group_gap", "most_agreed", "most_skipped", "response_overview"} <= ids)
+        self.assertIn("Share answering yes", dashboard["html"])
+
+    def test_categorical_data_without_survey_signals_is_not_a_survey(self) -> None:
+        passengers = pd.DataFrame(
+            {
+                "survived": [0, 1] * 100,
+                "pclass": [1, 2, 3, 3] * 50,
+                "sex": ["male", "female"] * 100,
+                "embarked": ["S", "C", "Q", "S"] * 50,
+                "class": ["First", "Second", "Third", "Third"] * 50,
+                "who": ["man", "woman", "child", "man"] * 50,
+                "alone": [True, False] * 100,
+                "fare": [7.25 + index % 60 for index in range(200)],
+            }
+        )
+        self.assertIsNone(detect(passengers))
+
+
 if __name__ == "__main__":
     unittest.main()

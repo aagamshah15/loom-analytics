@@ -5,8 +5,25 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
+from pipeline.business.common import (
+    collect_insights,
+    parse_flag,
+    prune_empty_blocks,
+    rate_by_dimensions,
+    render_blueprint_html,
+    score_insights,
+    template_frame,
+    unfilled_frame,
+)
 from pipeline.business.matching import detect_columns, normalize_name
+from pipeline.business.outcome_profile import (
+    SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
+    analyze_outcome,
+    build_outcome_insight_candidates,
+    build_outcome_layout,
+    context_support,
+    detect_outcome,
+)
 from pipeline.common.contracts import PipelineContext
 
 
@@ -117,7 +134,361 @@ def analyze_survey_context(context: PipelineContext) -> Optional[dict[str, Any]]
         or _analyze_text_sentiment_context(df)
         or _analyze_satisfaction_survey_context(df)
         or _analyze_wellbeing_survey_context(df)
+        or _analyze_respondent_outcome_context(df)
+        or _analyze_responses_context(unfilled_frame(context))
     )
+
+
+# --- Respondent outcome: a rating survey with an overall verdict per respondent ---
+
+RESPONDENT_OUTCOMES = [
+    {
+        "aliases": ["satisfaction", "satisfied", "overall_satisfaction", "customer_satisfaction", "is_satisfied"],
+        "positives": {"satisfied", "very satisfied"},
+        "negatives": {"neutral or dissatisfied", "dissatisfied", "very dissatisfied", "not satisfied", "unsatisfied", "neutral"},
+        "vocabulary": {"rate_label": "Satisfaction rate", "positive": "satisfied", "unit": "respondents"},
+    },
+    {
+        "aliases": ["would_recommend", "recommend", "recommended", "recommended_ind", "recommend_flag"],
+        "vocabulary": {"rate_label": "Recommendation rate", "positive": "recommending", "unit": "respondents"},
+    },
+]
+SURVEY_WORDS = (
+    "service", "satisfaction", "rating", "comfort", "cleanliness", "experience", "quality", "survey",
+    "respondent", "feedback", "booking", "convenient", "review",
+)
+
+
+def _analyze_respondent_outcome_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    found = detect_outcome(df, RESPONDENT_OUTCOMES, SURVEY_WORDS)
+    if found is None:
+        return None
+    column, flag, vocabulary = found
+    return analyze_outcome(df, flag, kind="survey_sentiment", profile="respondent_outcome", outcome_column=column, vocabulary=vocabulary)
+
+
+# --- Responses: one column per question, as form tools export them ---
+
+RESPONSES_SECTION_CONFIG = {
+    "overview": "KPI cards and key insights",
+    "agreement": "Charts: yes/no questions",
+    "answers": "Charts: answer breakdowns",
+    "groups": "Charts: differences between groups",
+    "notes": "Insight notes",
+}
+LIKERT_WORDS = {
+    "strongly agree", "agree", "disagree", "strongly disagree", "neutral", "don't know", "dont know", "not sure",
+    "maybe", "sometimes", "often", "rarely", "never", "always", "very satisfied", "satisfied", "dissatisfied",
+    "very likely", "likely", "unlikely", "somewhat", "n/a",
+}
+QUESTION_STARTS = ("do ", "did ", "how ", "what ", "which ", "would ", "have ", "are ", "is ", "in your ", "please ", "why ", "when ")
+DEMOGRAPHIC_WORDS = ("gender", "sex", "age", "country", "region", "state", "income", "education", "location")
+RESPONSE_MARKERS = ("timestamp", "respondentid", "respondent", "responseid", "submittedat", "starttime", "submissiondate")
+
+
+def _analyze_responses_context(df: Optional[pd.DataFrame]) -> Optional[dict[str, Any]]:
+    if df is None or len(df) < 20:
+        return None
+
+    answers = [
+        column
+        for column in df.columns
+        if not pd.api.types.is_numeric_dtype(df[column]) or df[column].nunique(dropna=True) <= 2
+        if 2 <= df[column].nunique(dropna=True) <= 7
+    ]
+    if len(answers) < 5 or len(answers) < 0.4 * len(df.columns) or not _looks_like_a_survey(df, answers):
+        return None
+
+    demographics = [
+        column
+        for column in df.columns
+        # Whole words only: "manager" contains "age".
+        if context_support([column], DEMOGRAPHIC_WORDS) and 2 <= df[column].nunique(dropna=True) <= 12
+    ]
+    questions = [column for column in answers if column not in demographics]
+
+    yes_rates = []
+    gaps = []
+    for column in questions:
+        flag = parse_flag(df[column])
+        if flag is None:
+            continue
+        yes_rates.append({"question": _question_label(column), "rate": round(float(flag.mean() * 100), 2), "answered": int(flag.notna().sum())})
+        for table in rate_by_dimensions(df, flag, demographics, limit=2):
+            gaps.append(
+                {
+                    "question": _question_label(column),
+                    "column": _question_label(table["column"], 32),
+                    "label": table["labels"][0],
+                    "rate": table["values"][0],
+                    "low_label": table["labels"][-1],
+                    "low_rate": table["values"][-1],
+                    "labels": table["labels"],
+                    "values": table["values"],
+                }
+            )
+    yes_rates.sort(key=lambda item: -item["rate"])
+    gaps.sort(key=lambda gap: -(gap["rate"] - gap["low_rate"]))
+
+    breakdowns = []
+    for column in questions:
+        counts = df[column].dropna().astype(str).value_counts()
+        breakdowns.append(
+            {
+                "question": _question_label(column),
+                "labels": [_question_label(label, 40) for label in counts.index.tolist()],
+                "values": [int(value) for value in counts.tolist()],
+                "top_share": round(float(counts.iloc[0] / counts.sum() * 100), 2),
+                "skipped_pct": round(float(df[column].isna().mean() * 100), 2),
+            }
+        )
+    if not breakdowns:
+        return None
+    decided = max(breakdowns, key=lambda item: item["top_share"])
+    split = min(breakdowns, key=lambda item: item["top_share"])
+    skipped = max(breakdowns, key=lambda item: item["skipped_pct"])
+
+    return {
+        "kind": "survey_sentiment",
+        "profile": "responses",
+        "dataset": {
+            "row_count": int(len(df)),
+            "column_count": int(len(df.columns)),
+            "input_columns": [str(column) for column in df.columns],
+            "respondent_count": int(len(df)),
+            "partial": True,
+        },
+        "summary": {
+            "respondent_count": int(len(df)),
+            "question_count": len(questions),
+            "most_agreed": yes_rates[0] if yes_rates else None,
+            "least_agreed": yes_rates[-1] if len(yes_rates) > 1 else None,
+            "top_gap": gaps[0] if gaps else None,
+            "second_gap": next((gap for gap in gaps[1:] if gap["question"] != gaps[0]["question"]), None) if gaps else None,
+            "most_decided": decided,
+            "most_split": split,
+            "most_skipped": skipped,
+        },
+        "signals": {
+            "yes_rates": {"labels": [item["question"] for item in yes_rates[:10]], "values": [item["rate"] for item in yes_rates[:10]]},
+            "breakdowns": breakdowns[:6],
+            "group_gaps": gaps[:3],
+        },
+    }
+
+
+def _looks_like_a_survey(df: pd.DataFrame, answers: list[Any]) -> bool:
+    """A response marker column, question-style headers, or rating-scale wording in the answers."""
+    names = [_normalize_column_name(column) for column in df.columns]
+    if any(name.startswith(RESPONSE_MARKERS) for name in names):
+        return True
+    headers = [str(column).strip().lower() for column in answers]
+    if sum(1 for header in headers if header.endswith("?") or header.startswith(QUESTION_STARTS) or len(header) >= 30) >= 3:
+        return True
+    scale_columns = 0
+    for column in answers:
+        values = {str(value).strip().lower() for value in df[column].dropna().unique()}
+        scale_columns += bool(values & LIKERT_WORDS)
+    return scale_columns >= 2
+
+
+def _question_label(value: Any, limit: int = 60) -> str:
+    text = " ".join(str(value).split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "\u2026"
+
+
+def _build_responses_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
+    summary = analysis["summary"]
+    agreed, least, gap, second = summary["most_agreed"], summary["least_agreed"], summary["top_gap"], summary["second_gap"]
+    decided, split, skipped = summary["most_decided"], summary["most_split"], summary["most_skipped"]
+
+    def gap_insight(item: dict[str, Any], insight_id: str, priority: int) -> dict[str, Any]:
+        return {
+            "id": insight_id,
+            "title": f"Answers to \"{item['question']}\" differ by {item['column']}",
+            "category": "groups",
+            "severity": "high",
+            "summary": (
+                f"{item['rate']:.0f}% answered yes where {item['column']} is {item['label']}, "
+                f"versus {item['low_rate']:.0f}% where it is {item['low_label']}."
+            ),
+            "detail": "Groups can differ in size and makeup, so read this as a prompt to look closer rather than a finding on its own.",
+            "metric_label": "Gap between groups",
+            "metric_value": f"{item['rate'] - item['low_rate']:.0f} pts",
+            "metric_sub": f"{item['label']} vs {item['low_label']}",
+            "tags": ["groups"],
+            "section": "groups",
+            "priority": priority,
+            "condition": item["rate"] - item["low_rate"] >= 10,
+        }
+
+    insights = collect_insights([
+        lambda: gap_insight(gap, "group_gap", 95),
+        lambda: gap_insight(second, "second_group_gap", 90),
+        lambda: {
+            "id": "most_agreed",
+            "title": f"{agreed['rate']:.0f}% said yes to \"{agreed['question']}\"",
+            "category": "agreement",
+            "severity": "medium",
+            "summary": f"It has the highest yes rate of the yes/no questions, from {agreed['answered']:,} answers.",
+            "detail": "The strongest point of agreement in the survey.",
+            "metric_label": "Highest yes rate",
+            "metric_value": f"{agreed['rate']:.0f}%",
+            "metric_sub": agreed["question"],
+            "tags": ["agreement"],
+            "section": "agreement",
+            "priority": 89,
+        },
+        lambda: {
+            "id": "least_agreed",
+            "title": f"Only {least['rate']:.0f}% said yes to \"{least['question']}\"",
+            "category": "agreement",
+            "severity": "medium",
+            "summary": f"It has the lowest yes rate of the yes/no questions, from {least['answered']:,} answers.",
+            "detail": "Where a yes was hoped for, this is the gap to close.",
+            "metric_label": "Lowest yes rate",
+            "metric_value": f"{least['rate']:.0f}%",
+            "metric_sub": least["question"],
+            "tags": ["agreement"],
+            "section": "agreement",
+            "priority": 88,
+            "condition": agreed["rate"] - least["rate"] >= 10,
+        },
+        lambda: {
+            "id": "most_decided",
+            "title": f"\"{decided['labels'][0]}\" dominates \"{decided['question']}\"",
+            "category": "answers",
+            "severity": "low",
+            "summary": f"{decided['top_share']:.0f}% of those who answered chose \"{decided['labels'][0]}\".",
+            "detail": "The most one-sided question in the survey.",
+            "metric_label": "Most one-sided answer",
+            "metric_value": f"{decided['top_share']:.0f}%",
+            "metric_sub": decided["question"],
+            "tags": ["answers"],
+            "section": "answers",
+            "priority": 86,
+            "condition": decided["top_share"] >= 60,
+        },
+        lambda: {
+            "id": "most_split",
+            "title": f"Respondents are split on \"{split['question']}\"",
+            "category": "answers",
+            "severity": "low",
+            "summary": f"The most common answer, \"{split['labels'][0]}\", was chosen by only {split['top_share']:.0f}%.",
+            "detail": "No answer has a majority, so averages hide real disagreement here.",
+            "metric_label": "Most divided question",
+            "metric_value": f"{split['top_share']:.0f}%",
+            "metric_sub": "share choosing the top answer",
+            "tags": ["answers"],
+            "section": "answers",
+            "priority": 85,
+            "condition": split["top_share"] < 50,
+        },
+        lambda: {
+            "id": "most_skipped",
+            "title": f"{skipped['skipped_pct']:.0f}% skipped \"{skipped['question']}\"",
+            "category": "answers",
+            "severity": "medium",
+            "summary": f"{skipped['skipped_pct']:.0f}% of respondents left this question blank.",
+            "detail": "Its results describe only those who answered, who may differ from those who did not.",
+            "metric_label": "Most skipped question",
+            "metric_value": f"{skipped['skipped_pct']:.0f}%",
+            "metric_sub": skipped["question"],
+            "tags": ["answers"],
+            "section": "answers",
+            "priority": 84,
+            "condition": skipped["skipped_pct"] >= 10,
+        },
+        lambda: {
+            "id": "response_overview",
+            "title": f"{summary['respondent_count']:,} respondents answered {summary['question_count']} questions",
+            "category": "overview",
+            "severity": "low",
+            "summary": f"The survey has {summary['respondent_count']:,} responses across {summary['question_count']} closed questions.",
+            "detail": "Shares on this dashboard are of those who answered each question.",
+            "metric_label": "Respondents",
+            "metric_value": f"{summary['respondent_count']:,}",
+            "metric_sub": f"{summary['question_count']} questions",
+            "tags": ["answers"],
+            "section": "answers",
+            "priority": 80,
+        },
+    ])
+    focus_tags = extract_focus_tags(user_prompt)
+    prompt_terms = extract_prompt_terms(user_prompt)
+    return {"insights": score_insights(insights, focus_tags, prompt_terms, minimum_recommended=3), "focus_tags": focus_tags}
+
+
+def _build_responses_layout_sections(
+    *,
+    approved_insights: list[dict[str, Any]],
+    metric_cards: list[dict[str, Any]],
+    analysis: dict[str, Any],
+    included_sections: list[str],
+    show_notes: bool,
+) -> list[dict[str, Any]]:
+    signals = analysis["signals"]
+
+    def chart(chart_id: str, title: str, subtitle: str, labels: list[str], values: list[Any], color: str, number_format: str) -> dict[str, Any]:
+        return {
+            "id": chart_id,
+            "kind": "chart",
+            "chart": {
+                "id": chart_id,
+                "title": title,
+                "subtitle": subtitle,
+                "type": "bar",
+                "labels": labels,
+                "series": [{"name": "Share" if number_format == "percent" else "Responses", "values": values, "color": color}],
+                "format": number_format,
+            },
+        }
+
+    section_map = {
+        "overview": {
+            "id": "overview",
+            "title": "Survey Overview",
+            "description": "What respondents agreed on, where they split, and where groups differ.",
+            "blocks": [
+                {"id": "overview-metrics", "kind": "metric_grid", "cards": [_metric_card_from_insight(card) for card in metric_cards]},
+                {"id": "overview-insights", "kind": "insight_grid", "insights": [_insight_card(item) for item in approved_insights[:4]]},
+            ],
+        },
+        "agreement": {
+            "id": "agreement",
+            "title": "Yes/No Questions",
+            "description": "Share answering yes, highest first.",
+            "blocks": [
+                chart("yes-rates", "Share answering yes", "Of those who answered each question.", signals["yes_rates"]["labels"], signals["yes_rates"]["values"], "#166534", "percent")
+            ],
+        },
+        "answers": {
+            "id": "answers",
+            "title": "Answer Breakdowns",
+            "description": "How responses divide on each question.",
+            "blocks": [
+                chart(f"answers-{index}", item["question"], "Number of respondents choosing each answer.", item["labels"], item["values"], "#c2410c", "number")
+                for index, item in enumerate(signals["breakdowns"])
+            ],
+        },
+        "groups": {
+            "id": "groups",
+            "title": "Differences Between Groups",
+            "description": "The yes/no questions where demographic groups answer most differently.",
+            "blocks": [
+                chart(f"group-gap-{index}", f"{item['question']} by {item['column']}", "Share answering yes in each group.", item["labels"], item["values"], "#0f766e", "percent")
+                for index, item in enumerate(signals["group_gaps"])
+            ],
+        },
+    }
+    if show_notes:
+        section_map["notes"] = {
+            "id": "notes",
+            "title": "Approved Insight Notes",
+            "description": "Narrative notes kept alongside the dashboard for review and export.",
+            "blocks": [{"id": "notes-list", "kind": "note_list", "insights": [_insight_card(item) for item in approved_insights]}],
+        }
+    return prune_empty_blocks([section_map[section] for section in included_sections if section in section_map])
 
 
 def _analyze_b2b_survey_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
@@ -252,6 +623,10 @@ def _analyze_b2b_survey_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
 
 def build_survey_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     profile = str(analysis.get("profile") or "b2b_nps")
+    if profile == "respondent_outcome":
+        return build_outcome_insight_candidates(analysis, user_prompt)
+    if profile == "responses":
+        return _build_responses_insight_candidates(analysis, user_prompt)
     if profile == "text_sentiment":
         return _build_text_sentiment_insight_candidates(analysis, user_prompt)
     if profile == "satisfaction":
@@ -427,7 +802,18 @@ def build_business_dashboard(
     }
 
 
-def dashboard_section_options(profile: Optional[str] = None) -> dict[str, str]:
+def dashboard_section_options(profile: Optional[str] = None, analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    if profile == "responses" and analysis:
+        # Offer only the sections this survey can fill (it may have no yes/no questions, or no demographics).
+        filled = _build_responses_layout_sections(
+            approved_insights=[],
+            metric_cards=[],
+            analysis=analysis,
+            included_sections=list(RESPONSES_SECTION_CONFIG),
+            show_notes=True,
+        )
+        available = {section["id"] for section in filled} | {"overview", "notes"}
+        return {section: label for section, label in RESPONSES_SECTION_CONFIG.items() if section in available}
     if profile is not None:
         return _section_config_for_profile(profile)
     merged: dict[str, str] = {}
@@ -705,6 +1091,10 @@ def _build_b2b_layout_sections(
 
 
 def _section_config_for_profile(profile: str) -> dict[str, str]:
+    if profile == "respondent_outcome":
+        return OUTCOME_SECTION_CONFIG
+    if profile == "responses":
+        return RESPONSES_SECTION_CONFIG
     if profile == "text_sentiment":
         return TEXT_SENTIMENT_SECTION_CONFIG
     if profile == "satisfaction":
@@ -743,6 +1133,15 @@ def _build_layout_sections_for_profile(
     show_notes: bool,
 ) -> list[dict[str, Any]]:
     profile = str(analysis.get("profile") or "b2b_nps")
+    if profile in {"respondent_outcome", "responses"}:
+        build_layout = build_outcome_layout if profile == "respondent_outcome" else _build_responses_layout_sections
+        return build_layout(
+            approved_insights=approved_insights,
+            metric_cards=metric_cards,
+            analysis=analysis,
+            included_sections=included_sections,
+            show_notes=show_notes,
+        )
     if profile == "text_sentiment":
         return _build_text_sentiment_layout_sections(
             approved_insights=approved_insights,
@@ -779,18 +1178,27 @@ def _build_layout_sections_for_profile(
 def _analyze_text_sentiment_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
     working_df = _recover_headerless_sentiment_frame(df)
     normalized = {_normalize_column_name(column): column for column in working_df.columns}
-    text_col = _match_column(normalized, ["text", "tweet", "message", "content", "review", "comment"])
-    sentiment_col = _match_column(normalized, ["sentiment", "label", "emotion", "sentimentlabel"])
-    if text_col is None or sentiment_col is None:
+    text_col = _match_column(normalized, ["text", "tweet", "message", "content", "review", "comment"]) or _free_text_column(working_df)
+    sentiment_col = _match_column(normalized, ["sentiment", "label", "emotion", "sentimentlabel"]) or _sentiment_column(working_df)
+    # Reviews usually carry a star rating instead of a sentiment label.
+    rating_col = None if sentiment_col is not None else _match_column(normalized, ["rating", "score", "stars", "star_rating", "overall_rating"])
+    if text_col is None or (sentiment_col is None and rating_col is None):
         return None
+    if rating_col is not None and working_df[text_col].astype(str).str.len().median() < 15:
+        return None  # a rating beside short labels is a product table, not feedback
 
-    source_col = _match_column(normalized, ["platform", "source", "channel", "entity", "brand", "topic"])
+    source_col = _match_column(
+        normalized,
+        ["platform", "source", "channel", "entity", "brand", "topic", "airline", "company", "product", "department_name", "category", "class_name"],
+    )
     time_col = _match_column(normalized, ["timeofday", "timeoftweet", "daypart", "timeslot", "time"])
 
     working = pd.DataFrame(
         {
             "text": working_df[text_col].astype(str).str.strip(),
-            "sentiment": working_df[sentiment_col].apply(_normalize_sentiment_label),
+            "sentiment": working_df[sentiment_col].apply(_normalize_sentiment_label)
+            if sentiment_col is not None
+            else _sentiment_from_rating(working_df[rating_col]),
             "source": working_df[source_col].astype(str).str.strip() if source_col else "All responses",
             "time_segment": working_df[time_col].astype(str).str.strip() if time_col else "",
         }
@@ -1504,6 +1912,44 @@ def _recover_headerless_sentiment_frame(df: pd.DataFrame) -> pd.DataFrame:
         return df
     body_rows = df.iloc[:, :4].astype(str).values.tolist()
     return pd.DataFrame([column_tokens, *body_rows], columns=["id", "source", "sentiment", "text"])
+
+
+def _free_text_column(df: pd.DataFrame) -> Optional[Any]:
+    """The column of written feedback: named like one and holding sentences, not labels."""
+    candidates = [
+        column
+        for column in df.columns
+        if any(word in _normalize_column_name(column) for word in ("review", "comment", "text", "feedback", "tweet", "message"))
+    ]
+    lengths = {column: float(df[column].dropna().astype(str).str.len().median() or 0) for column in candidates}
+    best = max(lengths, key=lengths.get, default=None)
+    return best if best is not None and lengths[best] >= 15 else None
+
+
+def _sentiment_column(df: pd.DataFrame) -> Optional[Any]:
+    """A column named for sentiment whose values are sentiment labels ("airline_sentiment", not its confidence)."""
+    for column in df.columns:
+        if "sentiment" not in _normalize_column_name(column):
+            continue
+        values = df[column].dropna()
+        if not values.empty and (values.map(_normalize_sentiment_label) != "Unknown").mean() >= 0.8:
+            return column
+    return None
+
+
+def _sentiment_from_rating(series: pd.Series) -> pd.Series:
+    """Star ratings as sentiment: the top two-fifths of the scale positive, the bottom two-fifths negative."""
+    rating = pd.to_numeric(series, errors="coerce")
+    top = rating.max()
+    if pd.isna(top) or top > 10 or rating.min() < 0:
+        return pd.Series("Unknown", index=series.index)
+    scale = 5 if top <= 5 else 10
+    share = rating / scale
+    labels = pd.Series("Neutral", index=series.index)
+    labels[share >= 0.8] = "Positive"
+    labels[share <= 0.4] = "Negative"
+    labels[rating.isna()] = "Unknown"
+    return labels
 
 
 def _normalize_sentiment_label(value: Any) -> str:
