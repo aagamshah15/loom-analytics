@@ -119,7 +119,9 @@ def format_number(value: Optional[float], number_format: str = "number") -> str:
     if value is None:
         return "n/a"
     if number_format == "percent":
-        return f"{value:.1f}%"
+        # Ad click-through rates sit well under 1%; one decimal would print them all as 0.0%.
+        decimals = 1 if abs(value) >= 1 or value == 0 else 2 if abs(value) >= 0.1 else 3
+        return f"{value:.{decimals}f}%"
     prefix = "$" if number_format == "currency" else ""
     magnitude = abs(value)
     if magnitude >= 1_000_000_000:
@@ -394,25 +396,29 @@ def prune_empty_blocks(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return kept_sections
 
 
-# Numeric columns that are labels, calendar parts or coordinates, not quantities worth averaging.
-NON_MEASURE_WORD = re.compile(
-    r"(^|[^a-z])(id|ids|uuid|zip|zipcode|postal|postcode|phone|code|"
-    r"year|month|day|week|quarter|hour|lat|latitude|lon|lng|longitude)([^a-z]|$)"
-)
+# Column names that identify a row. Never a measure, never a useful grouping.
+IDENTIFIER_WORD = re.compile(r"(^|[^a-z])(id|ids|uuid|zip|zipcode|postal|postcode|phone|code)([^a-z]|$)")
+# Calendar parts and coordinates: sensible to group by, meaningless to average.
+POSITION_WORD = re.compile(r"(^|[^a-z])(year|month|day|week|quarter|hour|lat|latitude|lon|lng|longitude)([^a-z]|$)")
 CAMEL_CASE_ID = re.compile(r"(?<=[a-z])I[dD]$|ID$")
 ROW_INDEX_NAMES = {"index", "rownames", "row", "sno", "s.no", "sr no", "serial"}
 
 
-def is_label_column_name(name: Any) -> bool:
-    """True for column names that identify or locate a row rather than measure something."""
+def is_identifier_column_name(name: Any) -> bool:
+    """True for column names that identify a row: ids, codes, row numbers."""
     text = str(name).strip()
     lowered = text.lower()
     return (
         lowered in ROW_INDEX_NAMES
         or lowered.startswith("unnamed")
-        or bool(NON_MEASURE_WORD.search(lowered))
+        or bool(IDENTIFIER_WORD.search(lowered))
         or bool(CAMEL_CASE_ID.search(text))
     )
+
+
+def is_label_column_name(name: Any) -> bool:
+    """True for column names that identify or locate a row rather than measure something."""
+    return is_identifier_column_name(name) or bool(POSITION_WORD.search(str(name).strip().lower()))
 
 
 def unfilled_frame(context: PipelineContext) -> Optional[pd.DataFrame]:

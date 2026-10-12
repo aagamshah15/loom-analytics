@@ -358,5 +358,87 @@ class SurveyShapeTests(unittest.TestCase):
         self.assertIsNone(detect(passengers))
 
 
+def ad_platform_export(rows: int = 300) -> pd.DataFrame:
+    records = []
+    for index in range(rows):
+        age = ["30-34", "35-39", "40-44", "45-49"][index % 4]
+        impressions = 4000 + (index * 911) % 30000
+        clicks = max(1, impressions // (2500 if age == "30-34" else 6000))
+        records.append(
+            {
+                "ad_id": 708_000 + index,
+                "xyz_campaign_id": [916, 936, 1178][index % 3],
+                "age": age,
+                "gender": "M" if index % 2 else "F",
+                "Impressions": impressions,
+                "Clicks": clicks,
+                "Spent": f"${clicks * (1.2 if age == '30-34' else 1.9):,.2f}",
+                "Total_Conversion": 1 + (index % 3 if age == "30-34" else 0),
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def traffic_report(rows: int = 240) -> pd.DataFrame:
+    days = pd.date_range("2023-01-01", periods=rows)
+    records = []
+    for index, day in enumerate(days):
+        weekend = day.dayofweek >= 5
+        unique_visits = (1400 if weekend else 3200) + index * 4
+        records.append(
+            {
+                "Row": index + 1,
+                "Day": day.day_name(),
+                "Date": day.strftime("%m/%d/%Y"),
+                "Page.Loads": f"{int(unique_visits * 1.4):,}",
+                "Unique.Visits": f"{unique_visits:,}",
+                "Returning.Visits": f"{int(unique_visits * 0.18):,}",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+class MetricProfileTests(unittest.TestCase):
+    def test_ad_platform_export_matches_marketing_with_derived_rates(self) -> None:
+        detected = detect(ad_platform_export())
+        self.assertEqual((detected["kind"], detected["analysis"]["profile"]), ("marketing_campaign", "performance"))
+        metrics = {item["name"]: item for item in detected["analysis"]["summary"]["metrics"]}
+        self.assertEqual(set(metrics), {"Click-through rate", "Cost per click", "Conversion rate", "Cost per conversion"})
+        frame = ad_platform_export()
+        self.assertAlmostEqual(metrics["Click-through rate"]["value"], frame["Clicks"].sum() / frame["Impressions"].sum() * 100, places=3)
+
+        review, dashboard = build(detected)
+        top = review["insights"][0]
+        self.assertIn("age", top["title"])
+        self.assertIn("30-34", top["summary"])
+        # Rates under 1% keep enough decimals to be told apart.
+        self.assertIn("<div>0.037%</div>", dashboard["html"])
+        self.assertTrue(">0.0%<" not in dashboard["html"])
+        self.assertEqual([section["id"] for section in dashboard["blueprint"]["layout_sections"]], list(detected["sections"]))
+
+    def test_daily_traffic_report_matches_web_analytics_with_a_trend(self) -> None:
+        detected = detect(traffic_report())
+        self.assertEqual((detected["kind"], detected["analysis"]["profile"]), ("web_app_analytics", "traffic"))
+        self.assertEqual(list(detected["sections"]), ["overview", "segments", "trends", "notes"])
+        analysis = detected["analysis"]
+        self.assertEqual(analysis["signals"]["metric_by_dimension"][0]["column"], "Day")
+        self.assertGreater(len(analysis["signals"]["metric_trends"]), 0)
+
+        review, _ = build(detected)
+        ids = {item["id"] for item in review["insights"]}
+        self.assertTrue({"metric_gap", "metric_trend"} <= ids)
+
+    def test_visit_counts_alone_are_not_web_traffic(self) -> None:
+        clinic = pd.DataFrame(
+            {
+                "clinic": ["North", "South", "East"] * 40,
+                "visits": [20 + index % 30 for index in range(120)],
+                "page_views": [5 + index % 9 for index in range(120)],
+                "staff": [3 + index % 4 for index in range(120)],
+            }
+        )
+        self.assertIsNone(detect(clinic))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,14 @@ import pandas as pd
 
 from pipeline.business.common import collect_insights, html_template, render_blueprint_html, script_json, template_frame
 from pipeline.business.matching import detect_columns
+from pipeline.business.metric_profile import (
+    SECTION_CONFIG as METRIC_SECTION_CONFIG,
+    analyze_metrics,
+    build_metric_insight_candidates,
+    build_metric_layout,
+    find_columns,
+    to_number,
+)
 from pipeline.business.outcome_profile import (
     SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
     analyze_outcome,
@@ -158,8 +166,46 @@ def analyze_marketing_context(context: PipelineContext) -> Optional[dict[str, An
         or _analyze_crm_context(df)
         or _analyze_lead_context(df)
         or _analyze_deals_context(df)
+        or _analyze_performance_context(df)
         or _analyze_conversion_context(df)
     )
+
+
+# --- Performance: one row per campaign, ad or day with delivery numbers, as ad platforms export them ---
+
+PERFORMANCE_FIELDS = {
+    "impressions": ["impressions", "impression_count", "impr", "reach"],
+    "clicks": ["clicks", "click_count", "link_clicks", "clicks_all"],
+    "spend": ["spend", "spent", "cost", "ad_spend", "amount_spent", "amount_spent_usd", "acquisition_cost"],
+    "conversions": ["conversions", "total_conversion", "conversion_count", "purchases", "results", "leads"],
+    "revenue": ["revenue", "conversion_value", "conv_value", "purchase_value", "attributed_revenue"],
+    "roi": ["roi", "roas", "return_on_ad_spend"],
+    "conversion_rate": ["conversion_rate", "conv_rate"],
+}
+
+
+def _analyze_performance_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    fields = find_columns(df, PERFORMANCE_FIELDS)
+    if "clicks" not in fields or not {"impressions", "spend"} & fields.keys():
+        return None
+
+    metrics: list[dict[str, Any]] = []
+    if "impressions" in fields:
+        metrics.append({"name": "Click-through rate", "numerator": fields["clicks"], "denominator": fields["impressions"], "scale": 100, "format": "percent"})
+    if "spend" in fields:
+        metrics.append({"name": "Cost per click", "numerator": fields["spend"], "denominator": fields["clicks"], "format": "currency"})
+    if "conversions" in fields:
+        metrics.append({"name": "Conversion rate", "numerator": fields["conversions"], "denominator": fields["clicks"], "scale": 100, "format": "percent"})
+        if "spend" in fields:
+            metrics.append({"name": "Cost per conversion", "numerator": fields["spend"], "denominator": fields["conversions"], "format": "currency"})
+    elif "conversion_rate" in fields:
+        as_fraction = to_number(df[fields["conversion_rate"]]).max() <= 1
+        metrics.append({"name": "Conversion rate", "column": fields["conversion_rate"], "scale": 100 if as_fraction else 1, "format": "percent"})
+    if "revenue" in fields and "spend" in fields:
+        metrics.append({"name": "Return on ad spend", "numerator": fields["revenue"], "denominator": fields["spend"]})
+    elif "roi" in fields:
+        metrics.append({"name": "Average ROI", "column": fields["roi"]})
+    return analyze_metrics(df, kind="marketing_campaign", profile="performance", metrics=metrics, unit="ad records")
 
 
 # --- Conversion: one row per person reached, with whether they converted (A/B tests, outreach lists) ---
@@ -541,6 +587,8 @@ def build_marketing_insight_candidates(analysis: dict[str, Any], user_prompt: st
     profile = analysis.get("profile", "attribution")
     if profile == "conversion":
         return build_outcome_insight_candidates(analysis, user_prompt)
+    if profile == "performance":
+        return build_metric_insight_candidates(analysis, user_prompt)
     if profile == "crm":
         return _build_crm_insights(analysis, user_prompt)
     if profile == "lead_generation":
@@ -947,6 +995,8 @@ def dashboard_section_options(profile: Optional[str] = None) -> dict[str, str]:
 def _section_config_for_profile(profile: Optional[str]) -> dict[str, str]:
     if profile == "conversion":
         return OUTCOME_SECTION_CONFIG
+    if profile == "performance":
+        return METRIC_SECTION_CONFIG
     if profile == "crm":
         return CRM_SECTION_CONFIG
     if profile == "lead_generation":
@@ -1090,8 +1140,9 @@ def _build_layout_sections(
     show_notes: bool,
 ) -> list[dict[str, Any]]:
     profile = analysis.get("profile", "attribution")
-    if profile == "conversion":
-        return build_outcome_layout(
+    if profile in {"conversion", "performance"}:
+        build_layout = build_outcome_layout if profile == "conversion" else build_metric_layout
+        return build_layout(
             approved_insights=approved_insights,
             metric_cards=metric_cards,
             analysis=analysis,
@@ -1295,7 +1346,7 @@ def _build_layout_sections(
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
-    if payload["dataset"].get("shape") == "outcome":
+    if payload["dataset"].get("shape") in {"outcome", "metrics"}:
         return render_blueprint_html(payload, eyebrow="Loom marketing dashboard")
     json_payload = script_json(payload, default=_json_default)
     template = html_template(

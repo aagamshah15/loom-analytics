@@ -7,6 +7,15 @@ import pandas as pd
 
 from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
 from pipeline.business.matching import detect_columns
+from pipeline.business.metric_profile import (
+    SECTION_CONFIG as METRIC_SECTION_CONFIG,
+    analyze_metrics,
+    build_metric_insight_candidates,
+    build_metric_layout,
+    find_columns,
+    is_metric_analysis,
+    to_number,
+)
 from pipeline.business.outcome_profile import (
     SECTION_CONFIG as OUTCOME_SECTION_CONFIG,
     analyze_outcome,
@@ -216,10 +225,55 @@ WEB_WORDS = (
 )
 
 
+# --- Traffic: visit counts and engagement numbers per day, source or session, with no conversion flag ---
+
+TRAFFIC_FIELDS = {
+    "visits": ["unique_visits", "visits", "sessions", "users", "visitors", "unique_visitors"],
+    "page_views": ["page_views", "pageviews", "page_loads"],
+    "returning_visits": ["returning_visits", "returning_visitors", "returning_users"],
+    "new_visits": ["first_time_visits", "new_visits", "new_users", "new_visitors"],
+    "bounce_rate": ["bounce_rate", "bounce_rates", "bounce"],
+    "conversion_rate": ["conversion_rate", "conv_rate", "goal_conversion_rate"],
+    "session_duration": ["session_duration", "avg_session_duration", "time_on_site"],
+    "time_on_page": ["time_on_page", "avg_time_on_page"],
+}
+# "visits" and "page views" alone also describe clinics and libraries.
+WEB_ONLY_FIELDS = {"returning_visits", "new_visits", "bounce_rate", "session_duration", "time_on_page"}
+
+
+def _analyze_traffic_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    fields = find_columns(df, TRAFFIC_FIELDS)
+    if len(fields) < 2 or not WEB_ONLY_FIELDS & fields.keys():
+        return None
+
+    def rate(field: str, name: str) -> dict[str, Any]:
+        as_fraction = to_number(df[fields[field]]).max() <= 1
+        return {"name": name, "column": fields[field], "scale": 100 if as_fraction else 1, "format": "percent"}
+
+    metrics: list[dict[str, Any]] = []
+    if "visits" in fields:
+        metrics.append({"name": "Average visits", "column": fields["visits"]})
+        if "returning_visits" in fields:
+            metrics.append({"name": "Returning visitor share", "numerator": fields["returning_visits"], "denominator": fields["visits"], "scale": 100, "format": "percent"})
+        if "page_views" in fields:
+            metrics.append({"name": "Pages per visit", "numerator": fields["page_views"], "denominator": fields["visits"]})
+    elif "page_views" in fields:
+        metrics.append({"name": "Average page views", "column": fields["page_views"]})
+    if "bounce_rate" in fields:
+        metrics.append(rate("bounce_rate", "Bounce rate"))
+    if "conversion_rate" in fields:
+        metrics.append(rate("conversion_rate", "Conversion rate"))
+    if "session_duration" in fields:
+        metrics.append({"name": "Session duration", "column": fields["session_duration"]})
+    if "time_on_page" in fields:
+        metrics.append({"name": "Time on page", "column": fields["time_on_page"]})
+    return analyze_metrics(df, kind="web_app_analytics", profile="traffic", metrics=metrics, unit="rows")
+
+
 def _analyze_sessions_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
     found = detect_outcome(df, SESSION_OUTCOMES, WEB_WORDS)
     if found is None:
-        return None
+        return _analyze_traffic_context(df)
     column, flag, vocabulary = found
     return analyze_outcome(df, flag, kind="web_app_analytics", profile="sessions", outcome_column=column, vocabulary=vocabulary)
 
@@ -227,6 +281,8 @@ def _analyze_sessions_context(df: pd.DataFrame) -> Optional[dict[str, Any]]:
 def build_web_analytics_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     if is_outcome_analysis(analysis):
         return build_outcome_insight_candidates(analysis, user_prompt)
+    if is_metric_analysis(analysis):
+        return build_metric_insight_candidates(analysis, user_prompt)
     summary = analysis["summary"]
     focus_tags = extract_focus_tags(user_prompt)
     insights = collect_insights([
@@ -531,7 +587,9 @@ def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms
 
 
 def _section_config(analysis: dict[str, Any]) -> dict[str, str]:
-    return OUTCOME_SECTION_CONFIG if is_outcome_analysis(analysis) else SECTION_CONFIG
+    if is_outcome_analysis(analysis):
+        return OUTCOME_SECTION_CONFIG
+    return METRIC_SECTION_CONFIG if is_metric_analysis(analysis) else SECTION_CONFIG
 
 
 def _default_sections(insights: list[dict[str, Any]], section_config: dict[str, str]) -> list[str]:
@@ -577,8 +635,9 @@ def _build_layout_sections(
     included_sections: list[str],
     show_notes: bool,
 ) -> list[dict[str, Any]]:
-    if is_outcome_analysis(analysis):
-        return build_outcome_layout(
+    if is_outcome_analysis(analysis) or is_metric_analysis(analysis):
+        build_layout = build_outcome_layout if is_outcome_analysis(analysis) else build_metric_layout
+        return build_layout(
             approved_insights=approved_insights,
             metric_cards=metric_cards,
             analysis=analysis,

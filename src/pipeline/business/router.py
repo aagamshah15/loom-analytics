@@ -61,6 +61,7 @@ from pipeline.business.financial_dashboard import (
     dashboard_section_options as financial_section_options,
 )
 from pipeline.business.matching import AliasTable, match_aliases
+from pipeline.business.metric_profile import is_metric_analysis, metric_section_options
 from pipeline.business.outcome_profile import is_outcome_analysis, outcome_section_options
 from pipeline.common.contracts import PipelineContext
 
@@ -196,7 +197,12 @@ def _shows_every_section(kind: str, analysis: dict[str, Any]) -> bool:
 
     True where the section list is already cut down to what the dataset can fill.
     """
-    return kind == "generic" or is_outcome_analysis(analysis) or bool(analysis.get("dataset", {}).get("partial"))
+    return (
+        kind == "generic"
+        or is_outcome_analysis(analysis)
+        or is_metric_analysis(analysis)
+        or bool(analysis.get("dataset", {}).get("partial"))
+    )
 
 
 def _try_analyze(
@@ -305,6 +311,8 @@ def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dic
     """Section ids and labels for a template. Pass the analysis to get the sections of its profile."""
     if is_outcome_analysis(analysis):
         return outcome_section_options(analysis)
+    if is_metric_analysis(analysis):
+        return metric_section_options(analysis)
     profile = (analysis or {}).get("profile")
     if kind == "financial_timeseries":
         return financial_section_options(analysis)
