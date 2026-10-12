@@ -9,6 +9,10 @@
 #           applies, or a list when more than one answer is acceptable.
 # notes     what makes the file's shape interesting.
 #
+# Tried and dropped (2026-10-12): aungpyaeap/supermarket-sales (403 from the Kaggle API),
+# thedevastator/unlock-profits-with-e-commerce-sales-data "Amazon Sale Report.csv" (over the
+# 50 MB ingestion limit), shriyashjagtap/e-commerce-customer-for-behavior-analysis (404).
+#
 # Labels were assigned from knowledge of each dataset and have not been checked
 # against the downloaded headers yet. Fix any that the scorecard shows are wrong.
 
@@ -782,19 +786,7 @@ entries:
     expected: ecommerce_orders
     notes: "invoice lines: Quantity x UnitPrice, non-UTF-8, ~45 MB"
 
-  - id: k-eco-supermarket-sales
-    source: kaggle
-    ref: aungpyaeap/supermarket-sales
-    file: "supermarket_sales - Sheet1.csv"
-    expected: ecommerce_orders
-    notes: "invoices with product line, payment, rating"
 
-  - id: k-eco-amazon-sale-report
-    source: kaggle
-    ref: thedevastator/unlock-profits-with-e-commerce-sales-data
-    file: "Amazon Sale Report.csv"
-    expected: ecommerce_orders
-    notes: "marketplace order export with status and fulfilment"
 
   - id: k-eco-olist-orders
     source: kaggle
@@ -817,12 +809,6 @@ entries:
     expected: [ecommerce_orders, generic]
     notes: "payments: type, installments, value"
 
-  - id: k-eco-customer-behavior
-    source: kaggle
-    ref: shriyashjagtap/e-commerce-customer-for-behavior-analysis
-    file: "E-commerce Customer Behavior - Sheet1.csv"
-    expected: [ecommerce_orders, generic]
-    notes: "one row per customer, not per order"
 
   - id: k-hr-hrdataset-v14
     source: kaggle

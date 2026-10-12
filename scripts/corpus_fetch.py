@@ -83,7 +83,8 @@ def main() -> int:
             print(f"  fetched  {entry['id']}  ({target.stat().st_size / 1024:.0f} KB)")
         except FetchError as exc:
             failures += 1
-            target.unlink(missing_ok=True)
+            # Leave nothing half-downloaded behind: the entry's directory holds only what this script put there.
+            shutil.rmtree(target.parent, ignore_errors=True)
             print(f"  FAILED   {entry['id']}: {exc}")
 
     print(f"\n{len(missing) - failures} fetched, {failures} failed. Corpus directory: {root}")
