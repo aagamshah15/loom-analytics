@@ -30,6 +30,22 @@ class PipelineTests(unittest.TestCase):
             with self.assertRaises(PipelineExecutionError):
                 run_ingestion(context, PipelineConfig())
 
+    def test_ingestion_reads_windows_1252_bytes_past_the_detection_sample(self) -> None:
+        # Encoding detection samples the first 10 KB; the accented byte sits well after it.
+        rows = ["id,city,amount"] + [f"{index},Springfield,{index * 3}" for index in range(900)]
+        content = "\n".join(rows).encode("ascii") + b"\n900,Montr\xe9al,2700\n"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "late-accent.csv"
+            path.write_bytes(content)
+            self.assertGreater(content.index(b"\xe9"), 10_000)
+            context = PipelineContext(input_path=path)
+
+            run_ingestion(context, PipelineConfig())
+
+        self.assertEqual(len(context.raw_df), 901)
+        self.assertEqual(context.raw_df["city"].iloc[-1], "Montr\u00e9al")
+        self.assertTrue(any("it was read as" in warning for warning in context.warnings))
+
     def test_validation_flags_outliers_and_duplicates(self) -> None:
         context = self._context_for_fixture("duplicates.csv")
         run_ingestion(context, PipelineConfig())

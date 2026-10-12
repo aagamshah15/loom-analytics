@@ -112,7 +112,7 @@ def _print_plan(root: Path, entries: list[dict[str, Any]], missing: list[dict[st
         f"{known_bytes / 1048576:.1f} MB of known size plus {unknown} of unknown size "
         f"(each capped at {MAX_FILE_BYTES // 1048576} MB)."
     )
-    if any(entry["source"] == "kaggle" for entry in missing) and shutil.which("kaggle") is None:
+    if any(entry["source"] == "kaggle" for entry in missing) and _kaggle_cli() is None:
         print(
             "Kaggle entries need the Kaggle CLI and your own API token:\n"
             "  pip install kaggle, then follow https://www.kaggle.com/docs/api to place the token."
@@ -143,12 +143,13 @@ def _fetch_url(url: str, target: Path) -> None:
 
 
 def _fetch_kaggle(entry: dict[str, Any], target: Path) -> None:
-    if shutil.which("kaggle") is None:
+    cli = _kaggle_cli()
+    if cli is None:
         raise FetchError("Kaggle CLI is not installed")
 
     # The CLI reads the user's own token; this script never opens or prints it.
     result = subprocess.run(
-        ["kaggle", "datasets", "download", "-d", entry["ref"], "-f", entry["file"], "-p", str(target.parent), "--force"],
+        [cli, "datasets", "download", "-d", entry["ref"], "-f", entry["file"], "-p", str(target.parent), "--force"],
         capture_output=True,
         text=True,
     )
@@ -164,6 +165,14 @@ def _fetch_kaggle(entry: dict[str, Any], target: Path) -> None:
         archive.unlink()
     if not _within_limit(target):
         raise FetchError(f"larger than {MAX_FILE_BYTES // 1048576} MB")
+
+
+def _kaggle_cli() -> Optional[str]:
+    """Prefer the CLI installed next to this interpreter; an older one on PATH may not read newer tokens."""
+    beside_interpreter = Path(sys.executable).parent / "kaggle"
+    if beside_interpreter.exists():
+        return str(beside_interpreter)
+    return shutil.which("kaggle")
 
 
 def _find_archive(directory: Path) -> Optional[Path]:

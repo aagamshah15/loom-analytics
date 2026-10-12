@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import csv
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ except ImportError:  # pragma: no cover - optional fallback
 
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+FALLBACK_ENCODINGS = ["utf-8", "cp1252", "latin-1"]
 
 
 def run_ingestion(context: PipelineContext, _: PipelineConfig) -> None:
@@ -43,20 +45,12 @@ def run_ingestion(context: PipelineContext, _: PipelineConfig) -> None:
     nonempty_line_count = _count_nonempty_lines(path, encoding)
 
     try:
-        df = pd.read_csv(
-            path,
-            encoding=encoding,
-            sep=delimiter,
-            engine="python",
-            on_bad_lines="skip",
-        )
+        df, used_encoding = _read_csv_with_fallback(path, encoding, delimiter)
     except pd.errors.EmptyDataError as exc:
         raise PipelineExecutionError(stage="ingestion", message="File contains no data rows.") from exc
-    except UnicodeDecodeError as exc:
-        raise PipelineExecutionError(
-            stage="ingestion",
-            message="The file encoding could not be decoded safely.",
-        ) from exc
+    if used_encoding != encoding:
+        context.add_warning(f"File was not valid {encoding}; it was read as {used_encoding}.")
+        encoding = used_encoding
 
     if nonempty_line_count <= 1 or df.empty:
         raise PipelineExecutionError(stage="ingestion", message="File contains no data rows.")
@@ -80,6 +74,26 @@ def run_ingestion(context: PipelineContext, _: PipelineConfig) -> None:
     }
 
 
+def _read_csv_with_fallback(path: Path, encoding: str, delimiter: str) -> tuple[pd.DataFrame, str]:
+    """Read with the detected encoding, then fall back.
+
+    Detection only samples the start of the file, so a file that looks like
+    ASCII or UTF-8 at the top can still contain Windows-1252 bytes further down.
+    latin-1 maps every byte, so the last attempt always decodes.
+    """
+    candidates = [encoding] + [name for name in FALLBACK_ENCODINGS if name.lower() != encoding.lower()]
+    for candidate in candidates[:-1]:
+        try:
+            return _read_csv(path, candidate, delimiter), candidate
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return _read_csv(path, candidates[-1], delimiter), candidates[-1]
+
+
+def _read_csv(path: Path, encoding: str, delimiter: str) -> pd.DataFrame:
+    return pd.read_csv(path, encoding=encoding, sep=delimiter, engine="python", on_bad_lines="skip")
+
+
 def _looks_binary(path: Path) -> bool:
     sample = path.read_bytes()[:1024]
     return b"\x00" in sample
@@ -96,6 +110,12 @@ def _detect_encoding(path: Path) -> dict[str, Any]:
 
     fallback_used = False
     if confidence < 0.8:
+        encoding = "latin-1"
+        fallback_used = True
+
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
         encoding = "latin-1"
         fallback_used = True
 
