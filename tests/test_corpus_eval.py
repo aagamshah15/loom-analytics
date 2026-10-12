@@ -63,8 +63,8 @@ class CorpusEvalTests(unittest.TestCase):
 
     def test_explain_miss_names_the_missing_required_fields(self) -> None:
         nearest = corpus_eval.explain_miss(["Order Date", "Sales", "Category", "Discount"])["ecommerce_orders"]
-        self.assertEqual(nearest["matched"], 3)
-        self.assertEqual(nearest["missing"], ["date", "channel", "payment", "device", "returned"])
+        self.assertEqual(nearest["matched"], 4)
+        self.assertEqual(nearest["missing"], ["channel", "payment", "device", "returned"])
 
     def test_scorecard_rates_and_baseline_diff(self) -> None:
         results = [

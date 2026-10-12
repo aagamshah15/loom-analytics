@@ -6,6 +6,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
+from pipeline.business.matching import detect_columns
 from pipeline.common.contracts import PipelineContext
 
 
@@ -404,19 +405,7 @@ def extract_prompt_terms(prompt: str) -> list[str]:
 
 
 def _detect_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:
-    normalized = {str(column).lower().strip(): column for column in df.columns}
-    required: dict[str, str] = {}
-    optional: dict[str, str] = {}
-    for canonical, aliases in REQUIRED_COLUMN_ALIASES.items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is None:
-            return None
-        required[canonical] = match
-    for canonical, aliases in OPTIONAL_COLUMN_ALIASES.items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is not None:
-            optional[canonical] = match
-    return {"required": required, "optional": optional}
+    return detect_columns(df, REQUIRED_COLUMN_ALIASES, OPTIONAL_COLUMN_ALIASES)
 
 
 def _weighted_summary(

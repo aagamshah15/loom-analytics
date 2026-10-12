@@ -336,6 +336,7 @@ function App() {
 
       {step === "template" && analysis ? (
         <TemplateConfirmation
+          candidates={analysis.detection?.candidates ?? []}
           detectedTemplate={analysis.detected_template}
           isApplying={isApplyingTemplate}
           onApplyOverride={handleApplyTemplateOverride}

@@ -27,15 +27,7 @@ from fastapi.testclient import TestClient
 
 from corpus_fetch import DEFAULT_MANIFEST, corpus_dir, entry_path, load_manifest
 from pipeline.api.app import app
-from pipeline.business import (
-    ecommerce_dashboard,
-    financial_dashboard,
-    healthcare_dashboard,
-    hr_dashboard,
-    marketing_dashboard,
-    survey_dashboard,
-    web_analytics_dashboard,
-)
+from pipeline.business.router import explain_detection
 
 
 GENERIC = "generic"
@@ -54,29 +46,6 @@ GOOD_OUTCOMES = {"ok", "generic"}
 # Right template chosen, whatever the quality of what was built from it.
 ACCEPTABLE_OUTCOMES = GOOD_OUTCOMES | {"thin", "generic_thin", "no_output"}
 THIN_BELOW = 3
-
-# Required-column tables per template profile, used only to explain a miss. Survey's
-# text, satisfaction and wellbeing profiles match by pattern and have no table.
-REQUIRED_FIELDS: dict[str, dict[str, dict[str, list[str]]]] = {
-    "financial_timeseries": {"ohlcv": financial_dashboard.REQUIRED_COLUMN_ALIASES},
-    "ecommerce_orders": {"orders": ecommerce_dashboard.REQUIRED_COLUMN_ALIASES},
-    "hr_workforce": {"workforce": hr_dashboard.REQUIRED_COLUMN_ALIASES},
-    "healthcare_medical": {
-        "outcomes": healthcare_dashboard.OUTCOMES_REQUIRED_COLUMN_ALIASES,
-        "admissions": healthcare_dashboard.ADMISSIONS_REQUIRED_COLUMN_ALIASES,
-        "insurance_risk": healthcare_dashboard.INSURANCE_REQUIRED_COLUMN_ALIASES,
-        "claims_fraud": healthcare_dashboard.CLAIMS_REQUIRED_COLUMN_ALIASES,
-    },
-    "marketing_campaign": {
-        "attribution": marketing_dashboard.ATTRIBUTION_REQUIRED_COLUMN_ALIASES,
-        "crm": marketing_dashboard.CRM_REQUIRED_COLUMN_ALIASES,
-        "lead_generation": marketing_dashboard.LEAD_REQUIRED_COLUMN_ALIASES,
-        "closed_deals": marketing_dashboard.DEAL_REQUIRED_COLUMN_ALIASES,
-    },
-    "survey_sentiment": {"b2b_nps": survey_dashboard.B2B_REQUIRED_COLUMN_ALIASES},
-    "web_app_analytics": {"traffic": web_analytics_dashboard.REQUIRED_COLUMN_ALIASES},
-}
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Score Loom's detection and dashboard output against a CSV corpus.")
@@ -288,22 +257,8 @@ def classify(result: dict[str, Any]) -> str:
 
 
 def explain_miss(columns: list[str]) -> dict[str, dict[str, Any]]:
-    """For each template, the profile closest to matching and the required fields it lacks.
-
-    A stand-in until detection itself can report this.
-    """
-    present = {str(column).lower().strip() for column in columns}
-    nearest: dict[str, dict[str, Any]] = {}
-    for kind, profiles in REQUIRED_FIELDS.items():
-        best: Optional[dict[str, Any]] = None
-        for profile, required in profiles.items():
-            missing = [field for field, aliases in required.items() if not any(alias in present for alias in aliases)]
-            matched = len(required) - len(missing)
-            candidate = {"profile": profile, "matched": matched, "required": len(required), "missing": missing}
-            if best is None or matched / len(required) > best["matched"] / best["required"]:
-                best = candidate
-        nearest[kind] = best or {}
-    return nearest
+    """Per template, the accepted shape closest to these columns and the required fields it lacks."""
+    return {candidate["kind"]: candidate for candidate in explain_detection(columns)}
 
 
 def build_scorecard(results: list[dict[str, Any]], not_fetched: list[str]) -> dict[str, Any]:
@@ -480,9 +435,9 @@ def _detail(item: dict[str, Any]) -> str:
         for kind in item["expected"]:
             nearest = item["nearest"].get(kind)
             if kind != GENERIC and nearest:
-                parts.append(
-                    f"{nearest['profile']} {nearest['matched']}/{nearest['required']}, missing {', '.join(nearest['missing'][:6])}"
-                )
+                shape = nearest["profile"] or kind
+                missing = ", ".join(nearest["missing"][:6]) or "nothing (too few usable rows)"
+                parts.append(f"{shape} {nearest['matched']}/{nearest['required']}, missing {missing}")
         return "; ".join(parts)
     return ""
 

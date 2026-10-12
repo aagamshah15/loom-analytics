@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
 import { ArrowRight, BarChart3, BriefcaseBusiness, CheckCircle2, Globe, HeartPulse, MessageSquareQuote, ShoppingBag, Sparkles, TrendingUp } from "lucide-react";
-import type { BusinessContext, TemplateOption } from "../types";
+import type { BusinessContext, DetectionCandidate, TemplateOption } from "../types";
 import { cn } from "../lib/cn";
 
 type TemplateConfirmationProps = {
+  candidates: DetectionCandidate[];
   detectedTemplate: BusinessContext | null;
   templateOptions: TemplateOption[];
   selectedKind: string;
@@ -24,7 +25,17 @@ const TEMPLATE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   generic: BarChart3,
 };
 
+function nearMissText(candidate: DetectionCandidate): string {
+  if (candidate.missing.length === 0) {
+    return "The columns are here, but too few rows have usable values.";
+  }
+  const shown = candidate.missing.slice(0, 5).join(", ").replace(/_/g, " ");
+  const more = candidate.missing.length > 5 ? `, and ${candidate.missing.length - 5} more` : "";
+  return `Not matched. Its closest accepted shape is missing: ${shown}${more}.`;
+}
+
 export function TemplateConfirmation({
+  candidates,
   detectedTemplate,
   templateOptions,
   selectedKind,
@@ -33,14 +44,19 @@ export function TemplateConfirmation({
   onContinue,
   isApplying,
 }: TemplateConfirmationProps) {
-  const confidence = detectedTemplate ? Math.round(detectedTemplate.confidence * 100) : 0;
+  const matchLabel = !detectedTemplate
+    ? "No specialized match"
+    : detectedTemplate.match
+      ? `Matched ${detectedTemplate.match.found} of ${detectedTemplate.match.expected} expected columns`
+      : "Template matched";
+  const candidatesByKind = new Map(candidates.map((candidate) => [candidate.kind, candidate]));
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center px-6 py-16" data-testid="template-screen">
       <div className="panel w-full p-8 md:p-10">
         <div className="mb-8 flex flex-wrap items-center gap-3">
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-            {detectedTemplate ? `${confidence}% detection confidence` : "Template review"}
+            {matchLabel}
           </span>
         </div>
 
@@ -55,6 +71,7 @@ export function TemplateConfirmation({
           {templateOptions.map((option) => {
             const Icon = TEMPLATE_ICONS[option.kind] ?? BarChart3;
             const selected = option.kind === selectedKind;
+            const candidate = candidatesByKind.get(option.kind);
 
             return (
               <button
@@ -85,6 +102,11 @@ export function TemplateConfirmation({
                     {selected ? <CheckCircle2 className="h-5 w-5 text-[#c2410c]" /> : null}
                   </div>
                   <p className="mt-2 text-sm leading-6 text-stone-500">{option.description}</p>
+                  {candidate && option.kind !== detectedTemplate?.kind ? (
+                    <p className="mt-2 text-xs leading-5 text-stone-400" data-testid={`template-near-miss-${option.kind}`}>
+                      {nearMissText(candidate)}
+                    </p>
+                  ) : null}
                 </div>
               </button>
             );

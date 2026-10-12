@@ -6,6 +6,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
+from pipeline.business.matching import detect_columns, normalize_name
 from pipeline.common.contracts import PipelineContext
 
 
@@ -465,19 +466,7 @@ def extract_prompt_terms(prompt: str) -> list[str]:
 
 
 def _detect_b2b_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:
-    normalized = {str(column).lower().strip(): column for column in df.columns}
-    required: dict[str, str] = {}
-    optional: dict[str, str] = {}
-    for canonical, aliases in B2B_REQUIRED_COLUMN_ALIASES.items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is None:
-            return None
-        required[canonical] = match
-    for canonical, aliases in B2B_OPTIONAL_COLUMN_ALIASES.items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is not None:
-            optional[canonical] = match
-    return {"required": required, "optional": optional}
+    return detect_columns(df, B2B_REQUIRED_COLUMN_ALIASES, B2B_OPTIONAL_COLUMN_ALIASES)
 
 
 def _normalize_binary(series: pd.Series) -> pd.Series:
@@ -1485,7 +1474,7 @@ def _build_wellbeing_layout_sections(
 
 
 def _normalize_column_name(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value).strip().lower())
+    return normalize_name(value)
 
 
 def _match_column(normalized: dict[str, Any], aliases: list[str]) -> Optional[Any]:

@@ -3,6 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Optional
 
+from pipeline.business import (
+    ecommerce_dashboard,
+    financial_dashboard,
+    healthcare_dashboard,
+    hr_dashboard,
+    marketing_dashboard,
+    survey_dashboard,
+    web_analytics_dashboard,
+)
 from pipeline.business.ecommerce_dashboard import (
     analyze_ecommerce_context,
     build_business_dashboard as build_ecommerce_dashboard,
@@ -51,6 +60,7 @@ from pipeline.business.financial_dashboard import (
     build_financial_insight_candidates,
     dashboard_section_options as financial_section_options,
 )
+from pipeline.business.matching import AliasTable, match_aliases
 from pipeline.common.contracts import PipelineContext
 
 logger = logging.getLogger(__name__)
@@ -66,6 +76,78 @@ _TEMPLATES: list[tuple[str, str, float, Callable[[PipelineContext], Optional[dic
     ("survey_sentiment", "Survey / Sentiment", 0.89, analyze_survey_context),
     ("web_app_analytics", "Web / App Analytics", 0.88, analyze_web_analytics_context),
 ]
+
+
+# The column shapes each template accepts, keyed by the profile name its analysis reports
+# (None for single-shape templates), as (required fields, optional fields). Survey also
+# recognizes text-sentiment, satisfaction and wellbeing exports by content, with no table.
+DETECTION_PROFILES: dict[str, dict[Optional[str], tuple[AliasTable, AliasTable]]] = {
+    "financial_timeseries": {
+        None: (financial_dashboard.REQUIRED_COLUMN_ALIASES, financial_dashboard.OPTIONAL_COLUMN_ALIASES),
+    },
+    "ecommerce_orders": {
+        None: (ecommerce_dashboard.REQUIRED_COLUMN_ALIASES, ecommerce_dashboard.OPTIONAL_COLUMN_ALIASES),
+    },
+    "healthcare_medical": {
+        "outcomes": (healthcare_dashboard.OUTCOMES_REQUIRED_COLUMN_ALIASES, healthcare_dashboard.OUTCOMES_OPTIONAL_COLUMN_ALIASES),
+        "admissions": (healthcare_dashboard.ADMISSIONS_REQUIRED_COLUMN_ALIASES, healthcare_dashboard.ADMISSIONS_OPTIONAL_COLUMN_ALIASES),
+        "insurance_risk": (healthcare_dashboard.INSURANCE_REQUIRED_COLUMN_ALIASES, {}),
+        "claims_fraud": (healthcare_dashboard.CLAIMS_REQUIRED_COLUMN_ALIASES, healthcare_dashboard.CLAIMS_OPTIONAL_COLUMN_ALIASES),
+    },
+    "marketing_campaign": {
+        "attribution": (marketing_dashboard.ATTRIBUTION_REQUIRED_COLUMN_ALIASES, marketing_dashboard.ATTRIBUTION_OPTIONAL_COLUMN_ALIASES),
+        "crm": (marketing_dashboard.CRM_REQUIRED_COLUMN_ALIASES, marketing_dashboard.CRM_OPTIONAL_COLUMN_ALIASES),
+        "lead_generation": (marketing_dashboard.LEAD_REQUIRED_COLUMN_ALIASES, {}),
+        "closed_deals": (marketing_dashboard.DEAL_REQUIRED_COLUMN_ALIASES, {}),
+    },
+    "hr_workforce": {
+        None: (hr_dashboard.REQUIRED_COLUMN_ALIASES, hr_dashboard.OPTIONAL_COLUMN_ALIASES),
+    },
+    "survey_sentiment": {
+        "b2b_nps": (survey_dashboard.B2B_REQUIRED_COLUMN_ALIASES, survey_dashboard.B2B_OPTIONAL_COLUMN_ALIASES),
+    },
+    "web_app_analytics": {
+        None: (web_analytics_dashboard.REQUIRED_COLUMN_ALIASES, web_analytics_dashboard.OPTIONAL_COLUMN_ALIASES),
+    },
+}
+
+
+def explain_detection(columns: list[Any]) -> list[dict[str, Any]]:
+    """For each template, the accepted shape closest to this dataset and the required fields it lacks.
+
+    Closest first. A template with nothing missing can still decline a dataset when too
+    few rows hold usable values.
+    """
+    candidates = []
+    for kind, display_name, _, _ in _TEMPLATES:
+        best: Optional[dict[str, Any]] = None
+        for profile, (required, _optional) in DETECTION_PROFILES[kind].items():
+            match = match_aliases(columns, required)
+            candidate = {
+                "kind": kind,
+                "display_name": display_name,
+                "profile": profile,
+                "matched": len(match.matched),
+                "required": len(required),
+                "missing": match.missing,
+            }
+            if best is None or candidate["matched"] / candidate["required"] > best["matched"] / best["required"]:
+                best = candidate
+        candidates.append(best)
+    return sorted(candidates, key=lambda candidate: -candidate["matched"] / candidate["required"])
+
+
+def _column_match(kind: str, analysis: dict[str, Any]) -> Optional[dict[str, int]]:
+    """How many of the template's known fields, required and optional, this dataset supplied."""
+    tables = DETECTION_PROFILES.get(kind, {}).get(analysis.get("profile"))
+    column_map = analysis.get("column_map")
+    if tables is None or not column_map:
+        return None
+    required, optional = tables
+    return {
+        "found": len(column_map.get("required", {})) + len(column_map.get("optional", {})),
+        "expected": len(required) + len(optional),
+    }
 
 
 def detect_business_context(context: PipelineContext) -> Optional[dict[str, Any]]:
@@ -97,7 +179,9 @@ def _business_context(kind: str, display_name: str, confidence: float, analysis:
         "kind": kind,
         "analysis": analysis,
         "display_name": display_name,
+        # A fixed per-template constant, kept for older clients. `match` is the measured figure.
         "confidence": confidence,
+        "match": _column_match(kind, analysis),
         # What the UI needs to label the builder, so it does not keep its own copy.
         "sections": section_options(kind, analysis),
         "default_title": default_dashboard_title(kind),

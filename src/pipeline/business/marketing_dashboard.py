@@ -6,6 +6,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from pipeline.business.common import collect_insights, html_template, script_json, template_frame
+from pipeline.business.matching import detect_columns
 from pipeline.common.contracts import PipelineContext
 
 
@@ -939,19 +940,7 @@ def _detect_columns(
     required_aliases: dict[str, list[str]],
     optional_aliases: Optional[dict[str, list[str]]] = None,
 ) -> Optional[dict[str, dict[str, str]]]:
-    normalized = {str(column).lower().strip(): column for column in df.columns}
-    required = {}
-    optional = {}
-    for canonical, aliases in required_aliases.items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is None:
-            return None
-        required[canonical] = match
-    for canonical, aliases in (optional_aliases or {}).items():
-        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
-        if match is not None:
-            optional[canonical] = match
-    return {"required": required, "optional": optional}
+    return detect_columns(df, required_aliases, optional_aliases)
 
 
 def _matching_row(frame: pd.DataFrame, labels: list[str]) -> Optional[pd.Series]:

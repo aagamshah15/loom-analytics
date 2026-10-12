@@ -14,6 +14,18 @@ export type BusinessContext = {
   default_title: string;
   // Sections to switch on initially; null means "the ones the insights point at".
   default_sections?: string[] | null;
+  // How many of the template's known columns the file supplied; null when it matched by content.
+  match?: { found: number; expected: number } | null;
+};
+
+// How close a template came to matching: its closest accepted shape and the required fields it lacks.
+export type DetectionCandidate = {
+  kind: string;
+  display_name: string;
+  profile: string | null;
+  matched: number;
+  required: number;
+  missing: string[];
 };
 
 export type InsightCandidate = {
@@ -50,6 +62,7 @@ export type AnalyzeResponse = {
   detected_template: BusinessContext | null;
   business_context: BusinessContext | null;
   review: ReviewBundle;
+  detection?: { candidates: DetectionCandidate[] };
   template_options: TemplateOption[];
 };
 

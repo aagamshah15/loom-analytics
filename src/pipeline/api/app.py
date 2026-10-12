@@ -16,6 +16,7 @@ from pipeline.business.router import (
     build_insight_candidates,
     default_dashboard_title,
     detect_business_context,
+    explain_detection,
     section_options,
     template_catalog,
 )
@@ -91,12 +92,13 @@ async def analyze_csv(
         raise HTTPException(status_code=422, detail=message)
 
     detected = detect_business_context(context)
+    candidates = explain_detection(list(context.raw_df.columns))
     business_context = None
 
     if template_override:
         business_context = analyze_for_kind(context, template_override)
         if business_context is None and template_override != "generic":
-            raise HTTPException(status_code=400, detail=f"Template override '{template_override}' did not match this dataset.")
+            raise HTTPException(status_code=400, detail=_override_failure(template_override, candidates))
     else:
         business_context = detected
 
@@ -119,9 +121,20 @@ async def analyze_csv(
             "detected_template": detected,
             "business_context": business_context,
             "review": review,
+            "detection": {"candidates": candidates},
             "template_options": template_catalog(),
         }
     )
+
+
+def _override_failure(kind: str, candidates: list[dict[str, Any]]) -> str:
+    message = f"Template override '{kind}' did not match this dataset."
+    candidate = next((item for item in candidates if item["kind"] == kind), None)
+    if candidate is None:
+        return message
+    if candidate["missing"]:
+        return f"{message} The closest shape it accepts is missing: {', '.join(candidate['missing'])}."
+    return f"{message} The columns are there, but too few rows have usable values."
 
 
 def _insights_or_none(context: PipelineContext, business_context: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
