@@ -15,6 +15,7 @@ for path in (SRC_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(path))
 
 from pipeline.business.matching import detect_columns, match_aliases, normalize_name
+from pipeline.business.common import parse_flag, prune_empty_blocks, rate_by_dimensions
 from pipeline.business.financial_dashboard import SECTION_CONFIG
 from pipeline.business.router import build_dashboard, build_insight_candidates, detect_business_context, explain_detection
 from pipeline.common.contracts import PipelineContext
@@ -146,6 +147,117 @@ class DetectionApiTests(unittest.TestCase):
         response = self._post(template_override="financial_timeseries")
         self.assertEqual(response.status_code, 400)
         self.assertIn("is missing: low", response.json()["detail"])
+
+
+def workforce_frame(rows: int = 200) -> pd.DataFrame:
+    """One row per employee with a leave flag, a department and tenure: no pay, ratings or engagement."""
+    departments = ["Stores", "Head Office", "Warehouse", "Online"]
+    records = []
+    for index in range(rows):
+        department = departments[index % len(departments)]
+        tenure = (index * 7) % 15
+        left = department == "Warehouse" and index % 3 != 0 or tenure < 2 and index % 2 == 0
+        records.append(
+            {
+                "EmployeeID": f"E{index:04d}",
+                "department_name": department,
+                "length_of_service": tenure,
+                "age": 22 + (index * 5) % 40,
+                "STATUS": "TERMINATED" if left else "ACTIVE",
+                "termreason_desc": "Resignation" if left else "Not Applicable",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+class SharedHelperTests(unittest.TestCase):
+    def test_parse_flag_reads_binary_columns_and_rejects_the_rest(self) -> None:
+        self.assertEqual(parse_flag(pd.Series(["Yes", "no", "YES", None])).tolist()[:3], [1.0, 0.0, 1.0])
+        self.assertEqual(parse_flag(pd.Series([0, 1, 1, 0])).tolist(), [0.0, 1.0, 1.0, 0.0])
+        statuses = pd.Series(["ACTIVE", "TERMINATED", "Active"])
+        self.assertEqual(parse_flag(statuses, positives={"terminated"}, negatives={"active"}).tolist(), [0.0, 1.0, 0.0])
+        # Not flags: unknown vocabulary, more than two values, or only one class present.
+        self.assertIsNone(parse_flag(pd.Series(["delivered", "shipped", "cancelled"] * 5)))
+        self.assertIsNone(parse_flag(pd.Series([3, 7, 9, 1])))
+        self.assertIsNone(parse_flag(pd.Series([0, 0, 0, 0])))
+
+    def test_rate_by_dimensions_skips_small_groups_and_restated_outcomes(self) -> None:
+        frame = workforce_frame()
+        flag = parse_flag(frame["STATUS"], positives={"terminated"}, negatives={"active"})
+        tables = rate_by_dimensions(frame, flag, ["department_name", "termreason_desc", "EmployeeID"])
+        self.assertEqual([table["column"] for table in tables], ["department_name"])
+        self.assertEqual(tables[0]["labels"][0], "Warehouse")
+        self.assertGreater(tables[0]["spread"], 30)
+
+    def test_prune_empty_blocks_drops_empty_charts_and_emptied_sections(self) -> None:
+        def chart(labels: list[str], values: list[float]) -> dict:
+            return {"id": "c", "kind": "chart", "chart": {"labels": labels, "series": [{"values": values}]}}
+
+        sections = [
+            {"id": "kept", "blocks": [chart(["a"], [1.0]), chart([], []), chart(["a", "b"], [0.0, 0.0])]},
+            {"id": "emptied", "blocks": [chart([], []), {"id": "s", "kind": "stat_list", "items": []}]},
+            {"id": "notes", "blocks": [{"id": "n", "kind": "note_list", "insights": []}]},
+        ]
+        pruned = prune_empty_blocks(sections)
+        self.assertEqual([section["id"] for section in pruned], ["kept", "notes"])
+        self.assertEqual(len(pruned[0]["blocks"]), 1)
+
+
+class HrTemplateTests(unittest.TestCase):
+    def _detect(self, frame: pd.DataFrame):
+        return detect_business_context(PipelineContext(clean_df=frame, raw_df=frame))
+
+    def test_leave_flag_with_department_and_tenure_is_enough(self) -> None:
+        detected = self._detect(workforce_frame())
+        self.assertIsNotNone(detected)
+        self.assertEqual(detected["kind"], "hr_workforce")
+        # No pay, ratings or training in the file, so those sections are not offered.
+        self.assertEqual(list(detected["sections"]), ["overview", "retention", "workforce_model", "notes"])
+
+        analysis = detected["analysis"]
+        self.assertIsNone(analysis["summary"]["avg_salary"])
+        charted = {table["column"] for table in analysis["signals"]["attrition_by_dimension"]}
+        self.assertNotIn("termreason_desc", charted, "a termination reason restates the outcome")
+        self.assertIn("Tenure band", charted)
+
+        insights = {item["id"] for item in build_insight_candidates("hr_workforce", analysis, "")["insights"]}
+        self.assertTrue({"attrition_hotspot", "overall_attrition"} <= insights)
+        self.assertFalse({"high_performers_leave_too", "vp_gender_pay_gap", "training_is_controllable_lever"} & insights)
+
+        dashboard = build_dashboard("hr_workforce", analysis, settings={"included_sections": list(detected["sections"])})
+        self.assertEqual([section["id"] for section in dashboard["blueprint"]["layout_sections"]], list(detected["sections"]))
+
+    def test_ratings_written_as_words_are_understood(self) -> None:
+        frame = workforce_frame().assign(
+            Attrition=lambda data: data["STATUS"].map({"TERMINATED": "Yes", "ACTIVE": "No"}),
+            JobSatisfaction=lambda data: [["Low", "Medium", "High", "Very_High"][index % 4] for index in range(len(data))],
+            PerformanceRating=lambda data: [["Excellent", "Outstanding"][index % 2] for index in range(len(data))],
+        ).drop(columns=["STATUS", "termreason_desc"])
+        analysis = self._detect(frame)["analysis"]
+        self.assertEqual(analysis["signals"]["attrition_by_performance"]["labels"], ["High performer", "Everyone else"])
+        self.assertAlmostEqual(analysis["summary"]["avg_engagement"], 6.25)
+
+    def test_a_status_column_alone_does_not_make_a_workforce_file(self) -> None:
+        orders = pd.DataFrame(
+            {
+                "order_id": range(120),
+                "department": ["Toys", "Garden", "Home"] * 40,
+                "status": ["delivered", "shipped", "cancelled", "returned"] * 30,
+                "amount": [20 + index % 50 for index in range(120)],
+            }
+        )
+        self.assertIsNone(self._detect(orders))
+
+        # A real leave flag, but nothing that marks the rows as employees.
+        subscribers = pd.DataFrame(
+            {
+                "customer_id": range(120),
+                "plan": ["Basic", "Plus", "Pro"] * 40,
+                "status": ["active", "terminated"] * 60,
+                "monthly_fee": [10 + index % 30 for index in range(120)],
+            }
+        )
+        self.assertIsNone(self._detect(subscribers))
 
 
 if __name__ == "__main__":

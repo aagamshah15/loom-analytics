@@ -294,3 +294,101 @@ _BLUEPRINT_TEMPLATE = html_template(
 </html>
 """
 )
+
+
+YES_WORDS = frozenset({"1", "1.0", "true", "t", "yes", "y"})
+NO_WORDS = frozenset({"0", "0.0", "false", "f", "no", "n"})
+
+
+def parse_flag(
+    series: pd.Series,
+    *,
+    positives: Iterable[str] = (),
+    negatives: Iterable[str] = (),
+) -> Optional[pd.Series]:
+    """Read a yes/no column as 1.0/0.0, or return None if it is not one.
+
+    ``positives`` and ``negatives`` add the template's own vocabulary ("terminated",
+    "active"). Templates that match on a single outcome column rely on the None:
+    a column named "status" holding order states must not be read as attrition.
+    """
+    if pd.api.types.is_bool_dtype(series):
+        flag = series.astype(float)
+    else:
+        yes = YES_WORDS | {word.lower() for word in positives}
+        no = NO_WORDS | {word.lower() for word in negatives}
+        text = series.map(lambda value: str(value).strip().lower().replace("_", " ") if pd.notna(value) else None)
+        flag = text.map(lambda value: 1.0 if value in yes else 0.0 if value in no else float("nan"))
+
+    answered = int(series.notna().sum())
+    if not answered or flag.notna().sum() < 0.9 * answered or flag.nunique(dropna=True) < 2:
+        return None
+    return flag
+
+
+def rate_by_dimensions(
+    frame: pd.DataFrame,
+    flag: pd.Series,
+    dimensions: Iterable[Any],
+    *,
+    max_levels: int = 12,
+    limit: int = 4,
+) -> list[dict[str, Any]]:
+    """How often a yes/no outcome occurs in each group of each grouping column, widest spread first.
+
+    Rates are percentages. Groups too small to trust are left out, a column needs
+    at least two remaining groups to be reported, and columns that merely restate
+    the outcome are skipped.
+    """
+    # Small groups produce extreme rates by chance; ask for more rows as the file grows, up to 50.
+    minimum_group = min(max(10, len(frame) // 100), 50)
+    tables = []
+    for column in dimensions:
+        labels = frame[column]
+        known = labels.notna() & flag.notna()
+        if labels[known].nunique() < 2 or labels[known].nunique() > max_levels:
+            continue
+        grouped = flag[known].groupby(labels[known].astype(str)).agg(["mean", "count"])
+        grouped = grouped[grouped["count"] >= minimum_group]
+        if len(grouped) < 2:
+            continue
+        grouped = grouped.sort_values("mean", ascending=False)
+        rates = (grouped["mean"] * 100).round(2)
+        if ((rates <= 2) | (rates >= 98)).all():
+            # Every group is all-yes or all-no: the column restates the outcome
+            # (a termination reason next to a terminated flag) and explains nothing.
+            continue
+        tables.append(
+            {
+                "column": str(column),
+                "labels": grouped.index.tolist(),
+                "values": [float(value) for value in rates.tolist()],
+                "counts": [int(value) for value in grouped["count"].tolist()],
+                "spread": float(rates.max() - rates.min()),
+            }
+        )
+    tables.sort(key=lambda table: -table["spread"])
+    return tables[:limit]
+
+
+def prune_empty_blocks(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop charts and stat lists that have nothing to show, and sections left with no blocks.
+
+    A dataset that lacks a template's optional columns should lose those parts of
+    the dashboard, not show empty axes.
+    """
+    kept_sections = []
+    for section in sections:
+        blocks = []
+        for block in section["blocks"]:
+            if block["kind"] == "chart":
+                series = block["chart"].get("series") or [{"values": []}]
+                has_values = any(value not in (None, 0, 0.0) for value in series[0]["values"])
+                if not block["chart"].get("labels") or not has_values:
+                    continue
+            elif block["kind"] == "stat_list" and not block["items"]:
+                continue
+            blocks.append(block)
+        if blocks:
+            kept_sections.append(dict(section, blocks=blocks))
+    return kept_sections

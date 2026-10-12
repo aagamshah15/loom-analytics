@@ -5,28 +5,58 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, script_json, template_frame
-from pipeline.business.matching import detect_columns
+from pipeline.business.common import collect_insights, html_template, parse_flag, prune_empty_blocks, rate_by_dimensions, script_json, template_frame
+from pipeline.business.matching import detect_columns, normalize_name
 from pipeline.common.contracts import PipelineContext
 
 
+# The one thing an HR dataset must have: who left. Everything else adds a part of the dashboard.
 REQUIRED_COLUMN_ALIASES = {
-    "department": ["department", "team", "function"],
-    "performance_score": ["performance_score", "performance", "review_score", "performancerating", "performance_rating", "last_evaluation"],
-    "attrition": ["attrition", "left", "left_company", "is_attrited", "terminated"],
-    "engagement_score": ["engagement_score", "engagement", "engagement_index", "jobsatisfaction", "job_satisfaction", "environmentsatisfaction", "environment_satisfaction", "satisfaction_level"],
-    "salary": ["salary", "compensation", "base_salary", "annual_salary", "monthlyincome", "monthly_income", "salaryslab", "salary_slab"],
+    "attrition": [
+        "attrition", "left", "left_company", "is_attrited", "terminated", "termd", "leave_or_not",
+        "churned", "employment_status", "status",
+    ],
 }
 
 OPTIONAL_COLUMN_ALIASES = {
-    "employee_id": ["employee_id", "employee", "worker_id", "id", "employeenumber", "employee_number", "empid", "emp_id"],
-    "gender": ["gender", "sex"],
-    "level": ["level", "job_level", "joblevel", "seniority", "title"],
+    "department": ["department", "department_name", "dept", "team", "function", "business_unit", "division"],
+    "performance_score": ["performance_score", "performance", "review_score", "performancerating", "performance_rating", "last_evaluation"],
+    "engagement_score": [
+        "engagement_score", "engagement", "engagement_index", "engagement_survey", "jobsatisfaction", "job_satisfaction",
+        "environmentsatisfaction", "environment_satisfaction", "satisfaction_level", "emp_satisfaction", "satisfaction",
+    ],
+    "salary": ["salary", "compensation", "base_salary", "annual_salary", "monthlyincome", "monthly_income", "salaryslab", "salary_slab", "pay_rate", "wage"],
+    "employee_id": ["employee_id", "employee", "worker_id", "employeenumber", "employee_number", "empid", "emp_id", "id"],
+    "gender": ["gender", "sex", "gender_full", "gender_short"],
+    "level": ["level", "job_level", "joblevel", "seniority", "title", "job_title", "position", "job_role"],
     "training_hours": ["training_hours", "learning_hours", "l_and_d_hours", "trainingtimeslastyear", "training_times_last_year"],
     "work_mode": ["work_mode", "location_type", "work_arrangement", "location", "workplace_type"],
-    "tenure_years": ["tenure_years", "tenure", "years_at_company"],
+    "tenure_years": ["tenure_years", "tenure", "years_at_company", "length_of_service", "years_of_service", "time_spend_company"],
     "manager_rating": ["manager_rating", "leadership_rating"],
+    "age": ["age"],
+    "hire_year": ["joining_year", "hire_year", "year_hired"],
 }
+
+# A leave flag alone could describe customers or subscriptions. These fields mark the rows as employees.
+HR_CONTEXT_FIELDS = (
+    "department", "performance_score", "engagement_score", "salary", "level",
+    "training_hours", "tenure_years", "manager_rating", "hire_year",
+)
+# Column names too general to trust on one supporting field.
+WEAK_ATTRITION_NAMES = {"status", "left", "terminated", "churned"}
+
+LEFT_WORDS = {"left", "attrited", "terminated", "resigned", "quit", "inactive", "voluntarily terminated", "terminated for cause"}
+STAYED_WORDS = {"stayed", "active", "employed", "current", "leave of absence", "future start"}
+
+# Rating scales written as words, on the template's 0-10 scale (a 1-4 scale times 2.5).
+ORDINAL_WORDS = {
+    "very low": 0.0, "pip": 2.5, "low": 2.5, "poor": 2.5, "needs improvement": 5.0, "medium": 5.0, "average": 5.0,
+    "fully meets": 7.5, "meets": 7.5, "high": 7.5, "good": 7.5, "excellent": 7.5,
+    "exceeds": 10.0, "very high": 10.0, "outstanding": 10.0,
+}
+
+AGE_BANDS = [(0, 30, "Under 30"), (30, 40, "30-39"), (40, 50, "40-49"), (50, 200, "50 and over")]
+TENURE_BANDS = [(0, 2, "Under 2 years"), (2, 5, "2-4 years"), (5, 10, "5-9 years"), (10, 100, "10+ years")]
 
 FOCUS_KEYWORDS = {
     "retention": ["retention", "attrition", "turnover", "leaving"],
@@ -85,65 +115,124 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
     detected = _detect_columns(df)
     if detected is None:
         return None
+    fields = {**detected["optional"], **detected["required"]}
+
+    attrition = parse_flag(df[fields["attrition"]], positives=LEFT_WORDS, negatives=STAYED_WORDS)
+    if attrition is None or not _looks_like_workforce(fields):
+        return None
+
+    def numeric(field: str) -> pd.Series:
+        column = fields.get(field)
+        if column is None:
+            return pd.Series(float("nan"), index=df.index)
+        return pd.to_numeric(df[column], errors="coerce")
+
+    def score(field: str) -> pd.Series:
+        column = fields.get(field)
+        return _normalize_score(df[column]) if column is not None else pd.Series(float("nan"), index=df.index)
 
     working = pd.DataFrame(
         {
             "employee_id": _employee_ids(df, detected),
-            "department": df[detected["required"]["department"]].astype(str).str.strip(),
-            "performance_score": _normalize_score(df[detected["required"]["performance_score"]]),
-            "attrition": _normalize_binary(df[detected["required"]["attrition"]]),
-            "engagement_score": _normalize_score(df[detected["required"]["engagement_score"]]),
+            "department": _optional_text_series(df, detected, "department", default="Unknown"),
+            "performance_score": score("performance_score"),
+            "attrition": attrition,
+            "engagement_score": score("engagement_score"),
             "gender": _optional_text_series(df, detected, "gender", default="Unknown"),
             "level": _optional_text_series(df, detected, "level", default="Unknown"),
-            "salary": _normalize_salary(df[detected["required"]["salary"]]),
-            "training_hours": _optional_numeric_series(df, detected, "training_hours"),
+            "salary": _normalize_salary(df[fields["salary"]]) if "salary" in fields else numeric("salary"),
+            "training_hours": numeric("training_hours"),
             "work_mode": _optional_text_series(df, detected, "work_mode", default="Unknown"),
+            "tenure_years": numeric("tenure_years"),
+            "age": numeric("age"),
         }
-    ).dropna(subset=["employee_id", "performance_score", "engagement_score", "salary"])
+    ).dropna(subset=["attrition"])
 
     if len(working) < 20:
         return None
 
-    if detected["optional"].get("tenure_years"):
-        working["tenure_years"] = pd.to_numeric(df.loc[working.index, detected["optional"]["tenure_years"]], errors="coerce")
-    else:
-        working["tenure_years"] = None
-
-    if working["training_hours"].isna().all():
-        working["training_hours"] = pd.Series([None] * len(working), index=working.index)
-    else:
+    if not working["training_hours"].isna().all():
         working["training_hours"] = _normalize_training_measure(working["training_hours"])
 
-    working["performance_group"] = working["performance_score"].apply(_performance_group)
-    working["engagement_group"] = working["engagement_score"].apply(_engagement_group)
+    has = {
+        column: bool(working[column].notna().any())
+        for column in ("performance_score", "engagement_score", "salary", "training_hours", "tenure_years", "age")
+    }
+    has["department"] = "department" in fields
+    has["work_mode"] = "work_mode" in fields
+
+    working["performance_group"] = working["performance_score"].map(_performance_group, na_action="ignore")
+    working["engagement_group"] = working["engagement_score"].map(_engagement_group, na_action="ignore")
     working["training_group"] = working["training_hours"].apply(_training_group)
     working["work_mode_group"] = working["work_mode"].apply(_normalize_work_mode)
 
-    attrition_by_performance = _rate_table(working, "performance_group", order=["High performer", "Everyone else"])
-    attrition_by_engagement = _rate_table(working, "engagement_group", order=["Very high engagement", "Mid engagement", "Low engagement"])
-    engagement_by_work_mode = working.groupby("work_mode_group")["engagement_score"].mean().sort_values(ascending=False)
-    attrition_by_work_mode = _rate_table(working, "work_mode_group")
-    training_frame = working[working["training_group"] != "Unknown"].copy()
-    engagement_by_training = training_frame.groupby("training_group")["engagement_score"].mean().reindex(["Under 15 hours", "15-44 hours", "45+ hours"]).fillna(0.0)
-    attrition_by_department = _rate_table(working, "department")
+    attrition_by_performance = (
+        _rate_table(working.dropna(subset=["performance_group"]), "performance_group", order=["High performer", "Everyone else"])
+        if has["performance_score"]
+        else {}
+    )
+    attrition_by_engagement = (
+        _rate_table(working.dropna(subset=["engagement_group"]), "engagement_group", order=["Very high engagement", "Mid engagement", "Low engagement"])
+        if has["engagement_score"]
+        else {}
+    )
+    attrition_by_work_mode = _rate_table(working, "work_mode_group") if has["work_mode"] else {}
+    engagement_by_work_mode = (
+        working.groupby("work_mode_group")["engagement_score"].mean().dropna().sort_values(ascending=False)
+        if has["work_mode"] and has["engagement_score"]
+        else pd.Series(dtype="float64")
+    )
+    training_frame = working[working["training_group"] != "Unknown"]
+    engagement_by_training = (
+        training_frame.groupby("training_group")["engagement_score"].mean().reindex(["Under 15 hours", "15-44 hours", "45+ hours"]).fillna(0.0)
+        if has["training_hours"] and has["engagement_score"]
+        else pd.Series(dtype="float64")
+    )
+    attrition_by_department = _rate_table(working, "department", limit=12) if has["department"] else {}
     avg_salary_by_level_gender = (
         working.groupby(["level", "gender"])["salary"].mean().reset_index().sort_values(["level", "gender"])
     )
 
-    high_perf_attrition = _value_or_zero(attrition_by_performance["High performer"]["rate"])
-    everyone_else_attrition = _value_or_zero(attrition_by_performance["Everyone else"]["rate"])
-    very_high_engagement_attrition = _value_or_zero(attrition_by_engagement["Very high engagement"]["rate"])
-    mid_engagement_attrition = _value_or_zero(attrition_by_engagement["Mid engagement"]["rate"])
-    remote_attrition = _first_matching_metric(attrition_by_work_mode, ["Remote"])
-    onsite_attrition = _first_matching_metric(attrition_by_work_mode, ["Onsite"])
-    remote_engagement = _first_matching_average(engagement_by_work_mode, ["Remote"])
-    onsite_engagement = _first_matching_average(engagement_by_work_mode, ["Onsite"])
-    low_training_engagement = float(engagement_by_training.get("Under 15 hours", 0.0))
-    high_training_engagement = float(engagement_by_training.get("45+ hours", 0.0))
-    customer_support_attrition = _first_matching_metric(attrition_by_department, ["Customer Support", "Support"])
+    # Whatever other grouping columns the file has, plus age and tenure bands: where does attrition differ most?
+    dimension_frame = df.loc[working.index].drop(columns=[fields["attrition"]])
+    named_columns = {fields[field] for field in ("department", "work_mode", "employee_id") if field in fields}
+    dimensions = [column for column in dimension_frame.columns if column not in named_columns]
+    if has["age"]:
+        dimension_frame = dimension_frame.assign(**{"Age band": _band(working["age"], AGE_BANDS)})
+        dimensions.append("Age band")
+    if has["tenure_years"]:
+        dimension_frame = dimension_frame.assign(**{"Tenure band": _band(working["tenure_years"], TENURE_BANDS)})
+        dimensions.append("Tenure band")
+    attrition_by_dimension = rate_by_dimensions(dimension_frame, working["attrition"], dimensions)
+    if has["department"] and len(attrition_by_department) >= 2:
+        rates = [metrics["rate"] for metrics in attrition_by_department.values()]
+        attrition_by_dimension.append(
+            {
+                "column": str(fields["department"]),
+                "labels": list(attrition_by_department.keys()),
+                "values": [round(rate, 2) for rate in rates],
+                "counts": [metrics["count"] for metrics in attrition_by_department.values()],
+                "spread": max(rates) - min(rates),
+            }
+        )
+    if not any([attrition_by_dimension, attrition_by_performance, attrition_by_engagement, attrition_by_department]):
+        return None  # a leave flag with nothing to compare it across
+
+    attrition_by_dimension.sort(key=lambda table: -table["spread"])
+    attrition_gaps = [
+        {
+            "column": table["column"],
+            "label": table["labels"][0],
+            "rate": table["values"][0],
+            "count": table["counts"][0],
+            "low_label": table["labels"][-1],
+            "low_rate": table["values"][-1],
+        }
+        for table in attrition_by_dimension[:2]
+    ]
+    leavers = working[working["attrition"] == 1.0]
+    stayers = working[working["attrition"] == 0.0]
     company_attrition = float(working["attrition"].mean() * 100)
-    female_vp_salary = _level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["female", "f"])
-    male_vp_salary = _level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["male", "m"])
 
     return {
         "kind": "hr_workforce",
@@ -157,35 +246,33 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
         "summary": {
             "employee_count": int(working["employee_id"].nunique()),
             "overall_attrition_rate": company_attrition,
-            "avg_engagement": float(working["engagement_score"].mean()),
-            "avg_salary": float(working["salary"].mean()),
-            "high_perf_attrition": high_perf_attrition,
-            "everyone_else_attrition": everyone_else_attrition,
-            "very_high_engagement_attrition": very_high_engagement_attrition,
-            "mid_engagement_attrition": mid_engagement_attrition,
-            "remote_attrition": remote_attrition,
-            "onsite_attrition": onsite_attrition,
-            "remote_engagement": remote_engagement,
-            "onsite_engagement": onsite_engagement,
-            "low_training_engagement": low_training_engagement,
-            "high_training_engagement": high_training_engagement,
-            "customer_support_attrition": customer_support_attrition,
-            "female_vp_salary": female_vp_salary,
-            "male_vp_salary": male_vp_salary,
+            "leaver_count": int(len(leavers)),
+            "avg_engagement": _mean(working["engagement_score"]),
+            "avg_salary": _mean(working["salary"]),
+            "high_perf_attrition": _rate(attrition_by_performance, "High performer"),
+            "everyone_else_attrition": _rate(attrition_by_performance, "Everyone else"),
+            "very_high_engagement_attrition": _rate(attrition_by_engagement, "Very high engagement"),
+            "mid_engagement_attrition": _rate(attrition_by_engagement, "Mid engagement"),
+            "remote_attrition": _first_matching_metric(attrition_by_work_mode, ["Remote"]),
+            "onsite_attrition": _first_matching_metric(attrition_by_work_mode, ["Onsite"]),
+            "remote_engagement": _first_matching_average(engagement_by_work_mode, ["Remote"]),
+            "onsite_engagement": _first_matching_average(engagement_by_work_mode, ["Onsite"]),
+            "low_training_engagement": float(engagement_by_training.get("Under 15 hours", 0.0)),
+            "high_training_engagement": float(engagement_by_training.get("45+ hours", 0.0)),
+            "customer_support_attrition": _first_matching_metric(attrition_by_department, ["Customer Support", "Support"]),
+            "female_vp_salary": _level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["female", "f"]),
+            "male_vp_salary": _level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["male", "m"]),
+            "attrition_hotspot": attrition_gaps[0] if attrition_gaps else None,
+            "attrition_second_gap": attrition_gaps[1] if len(attrition_gaps) > 1 else None,
+            "leaver_tenure": _median(leavers["tenure_years"]),
+            "stayer_tenure": _median(stayers["tenure_years"]),
+            "leaver_salary": _mean(leavers["salary"]),
+            "stayer_salary": _mean(stayers["salary"]),
         },
         "signals": {
-            "attrition_by_performance": {
-                "labels": list(attrition_by_performance.keys()),
-                "values": [round(metrics["rate"], 2) for metrics in attrition_by_performance.values()],
-            },
-            "attrition_by_engagement": {
-                "labels": list(attrition_by_engagement.keys()),
-                "values": [round(metrics["rate"], 2) for metrics in attrition_by_engagement.values()],
-            },
-            "attrition_by_work_mode": {
-                "labels": list(attrition_by_work_mode.keys()),
-                "values": [round(metrics["rate"], 2) for metrics in attrition_by_work_mode.values()],
-            },
+            "attrition_by_performance": _table_signal(attrition_by_performance),
+            "attrition_by_engagement": _table_signal(attrition_by_engagement),
+            "attrition_by_work_mode": _table_signal(attrition_by_work_mode),
             "engagement_by_work_mode": {
                 "labels": engagement_by_work_mode.index.tolist(),
                 "values": [round(float(value), 2) for value in engagement_by_work_mode.tolist()],
@@ -194,13 +281,18 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
                 "labels": engagement_by_training.index.tolist(),
                 "values": [round(float(value), 2) for value in engagement_by_training.tolist()],
             },
-            "attrition_by_department": {
-                "labels": list(attrition_by_department.keys()),
-                "values": [round(metrics["rate"], 2) for metrics in attrition_by_department.values()],
+            "attrition_by_department": _table_signal(attrition_by_department),
+            "attrition_by_dimension": [table for table in attrition_by_dimension if table["column"] != str(fields.get("department"))],
+            "salary_by_attrition": {
+                "labels": ["Left", "Stayed"],
+                "values": [round(_mean(leavers["salary"]) or 0.0, 2), round(_mean(stayers["salary"]) or 0.0, 2)],
             },
             "vp_gender_pay": {
                 "labels": ["Female VP", "Male VP"],
-                "values": [round(float(female_vp_salary or 0.0), 2), round(float(male_vp_salary or 0.0), 2)],
+                "values": [
+                    round(float(_level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["female", "f"]) or 0.0), 2),
+                    round(float(_level_gender_salary(avg_salary_by_level_gender, ["VP", "Vice President"], ["male", "m"]) or 0.0), 2),
+                ],
             },
         },
     }
@@ -208,6 +300,10 @@ def analyze_hr_context(context: PipelineContext) -> Optional[dict[str, Any]]:
 
 def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "") -> dict[str, Any]:
     summary = analysis["summary"]
+    hotspot = summary["attrition_hotspot"]
+    second_gap = summary["attrition_second_gap"]
+    # Some files hold one row per employee per year; rates are then per record, not per person.
+    unit = "employees" if summary["employee_count"] == analysis["dataset"]["row_count"] else "employee records"
     focus_tags = extract_focus_tags(user_prompt)
 
     insights = collect_insights([
@@ -311,6 +407,91 @@ def build_hr_insight_candidates(analysis: dict[str, Any], user_prompt: str = "")
             "priority": 99,
             "condition": summary["customer_support_attrition"] is not None,
         },
+        lambda: {
+            "id": "attrition_hotspot",
+            "title": f"Attrition is concentrated where {hotspot['column']} is {hotspot['label']}",
+            "category": "retention",
+            "severity": "high",
+            "summary": (
+                f"{hotspot['rate']:.1f}% of the {hotspot['count']:,} {unit} with {hotspot['column']} = {hotspot['label']} left, "
+                f"versus {summary['overall_attrition_rate']:.1f}% overall and {hotspot['low_rate']:.1f}% where it is {hotspot['low_label']}."
+            ),
+            "detail": "This is the widest attrition gap across any grouping in the file. It is the first place to look for a cause, not proof of one.",
+            "metric_label": "Highest-attrition group",
+            "metric_value": f"{hotspot['rate']:.1f}%",
+            "metric_sub": f"{hotspot['column']}: {hotspot['label']}",
+            "tags": ["retention"],
+            "section": "retention",
+            "priority": 94,
+            "condition": hotspot["rate"] - hotspot["low_rate"] >= 5,
+        },
+        lambda: {
+            "id": "attrition_second_gap",
+            "title": f"Attrition also differs by {second_gap['column']}",
+            "category": "workforce model",
+            "severity": "medium",
+            "summary": (
+                f"Where {second_gap['column']} is {second_gap['label']}, {second_gap['rate']:.1f}% left, "
+                f"versus {second_gap['low_rate']:.1f}% where it is {second_gap['low_label']}."
+            ),
+            "detail": "Two groupings with wide gaps may describe the same people. Check how much they overlap before treating them as separate causes.",
+            "metric_label": "Second-widest attrition gap",
+            "metric_value": f"{second_gap['rate'] - second_gap['low_rate']:.1f} pts",
+            "metric_sub": f"{second_gap['column']}: {second_gap['label']} vs {second_gap['low_label']}",
+            "tags": ["retention", "workforce_model"],
+            "section": "workforce_model",
+            "priority": 87,
+            "condition": second_gap["rate"] - second_gap["low_rate"] >= 5,
+        },
+        lambda: {
+            "id": "leavers_tenure_gap",
+            "title": "People who leave do so " + ("early" if summary["leaver_tenure"] < summary["stayer_tenure"] else "late") + " in their tenure",
+            "category": "retention",
+            "severity": "medium",
+            "summary": (
+                f"Employees who left had a median tenure of {summary['leaver_tenure']:.1f} years, "
+                f"versus {summary['stayer_tenure']:.1f} years for those who stayed."
+            ),
+            "detail": "A gap this size points at a specific stage of the employee lifecycle rather than at attrition in general.",
+            "metric_label": "Median tenure of leavers",
+            "metric_value": f"{summary['leaver_tenure']:.1f} yrs",
+            "metric_sub": f"stayers: {summary['stayer_tenure']:.1f} yrs",
+            "tags": ["retention"],
+            "section": "retention",
+            "priority": 88,
+            "condition": abs(summary["leaver_tenure"] - summary["stayer_tenure"]) >= 0.15 * max(summary["stayer_tenure"], 0.5),
+        },
+        lambda: {
+            "id": "leavers_pay_gap",
+            "title": "Leavers were paid " + ("less" if summary["leaver_salary"] < summary["stayer_salary"] else "more") + " than those who stayed",
+            "category": "compensation",
+            "severity": "medium",
+            "summary": (
+                f"Employees who left averaged ${summary['leaver_salary']:,.0f}, versus ${summary['stayer_salary']:,.0f} for those who stayed."
+            ),
+            "detail": "Pay differences often track level and tenure, so compare like with like before concluding pay drives exits.",
+            "metric_label": "Leaver vs stayer pay",
+            "metric_value": f"{(summary['leaver_salary'] / summary['stayer_salary'] - 1) * 100:+.0f}%",
+            "metric_sub": "average pay of leavers relative to stayers",
+            "tags": ["compensation", "retention"],
+            "section": "compensation",
+            "priority": 86,
+            "condition": abs(summary["leaver_salary"] / summary["stayer_salary"] - 1) >= 0.05,
+        },
+        lambda: {
+            "id": "overall_attrition",
+            "title": f"{summary['overall_attrition_rate']:.1f}% of {unit} in this file are exits",
+            "category": "retention",
+            "severity": "low",
+            "summary": f"{summary['leaver_count']:,} of {analysis['dataset']['row_count']:,} {unit} are recorded as having left.",
+            "detail": "Whether that is high depends on the period the file covers and the industry; use it as the baseline for the comparisons here.",
+            "metric_label": "Overall attrition",
+            "metric_value": f"{summary['overall_attrition_rate']:.1f}%",
+            "metric_sub": f"{summary['leaver_count']:,} leavers",
+            "tags": ["retention"],
+            "section": "retention",
+            "priority": 85,
+        },
     ])
 
     filtered = [item for item in insights if item.get("condition", True)]
@@ -413,8 +594,19 @@ def extract_prompt_terms(prompt: str) -> list[str]:
     return terms
 
 
-def dashboard_section_options() -> dict[str, str]:
-    return SECTION_CONFIG
+def dashboard_section_options(analysis: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    """Sections this dataset can fill. Without an analysis, every section the template knows."""
+    if not analysis:
+        return SECTION_CONFIG
+    filled = _build_layout_sections(
+        approved_insights=[],
+        metric_cards=[],
+        analysis=analysis,
+        included_sections=list(SECTION_CONFIG),
+        show_notes=True,
+    )
+    available = {section["id"] for section in filled} | {"overview", "notes"}
+    return {section: label for section, label in SECTION_CONFIG.items() if section in available}
 
 
 def _instruction_bonus(item: dict[str, Any], focus_tags: list[str], prompt_terms: list[str]) -> int:
@@ -439,21 +631,45 @@ def _detect_columns(df: pd.DataFrame) -> Optional[dict[str, dict[str, str]]]:
     return detect_columns(df, REQUIRED_COLUMN_ALIASES, OPTIONAL_COLUMN_ALIASES)
 
 
-def _normalize_binary(series: pd.Series) -> pd.Series:
-    if pd.api.types.is_bool_dtype(series):
-        return series.astype(float)
-    if pd.api.types.is_numeric_dtype(series):
-        numeric = pd.to_numeric(series, errors="coerce").fillna(0.0)
-        if numeric.max() > 1:
-            numeric = numeric > 0
-        return numeric.astype(float)
-    normalized = series.astype(str).str.strip().str.lower()
-    positives = {"1", "true", "yes", "left", "attrited", "terminated"}
-    return normalized.isin(positives).astype(float)
+def _looks_like_workforce(fields: dict[str, Any]) -> bool:
+    """Enough employee-specific columns beside the leave flag to rule out customers or orders."""
+    support = sum(1 for field in HR_CONTEXT_FIELDS if field in fields)
+    employee_id = fields.get("employee_id")
+    if employee_id is not None and any(word in normalize_name(employee_id) for word in ("emp", "worker", "staff")):
+        support += 1
+    needed = 2 if normalize_name(fields["attrition"]) in WEAK_ATTRITION_NAMES else 1
+    return support >= needed
+
+
+def _band(values: pd.Series, bands: list[tuple[float, float, str]]) -> pd.Series:
+    edges = [bands[0][0]] + [upper for _, upper, _ in bands]
+    return pd.cut(values, bins=edges, labels=[label for _, _, label in bands], right=False).astype(object)
+
+
+def _mean(series: pd.Series) -> Optional[float]:
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    return float(values.mean()) if not values.empty else None
+
+
+def _median(series: pd.Series) -> Optional[float]:
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    return float(values.median()) if not values.empty else None
+
+
+def _rate(table: dict[str, dict[str, float]], label: str) -> Optional[float]:
+    return float(table[label]["rate"]) if label in table else None
+
+
+def _table_signal(table: dict[str, dict[str, float]]) -> dict[str, list[Any]]:
+    return {"labels": list(table.keys()), "values": [round(metrics["rate"], 2) for metrics in table.values()]}
 
 
 def _normalize_score(series: pd.Series) -> pd.Series:
     numeric = pd.to_numeric(series, errors="coerce")
+    if numeric.notna().sum() < 0.5 * series.notna().sum():
+        # Ratings written as words: "Low", "Fully Meets", "Very_High".
+        words = series.map(lambda value: str(value).strip().lower().replace("_", " ") if pd.notna(value) else None)
+        return words.map(ORDINAL_WORDS)
     max_value = numeric.dropna().max()
     if pd.isna(max_value):
         return numeric
@@ -553,7 +769,12 @@ def _normalize_work_mode(value: str) -> str:
     return "Unknown"
 
 
-def _rate_table(df: pd.DataFrame, column: str, order: Optional[list[str]] = None) -> dict[str, dict[str, float]]:
+def _rate_table(
+    df: pd.DataFrame,
+    column: str,
+    order: Optional[list[str]] = None,
+    limit: Optional[int] = None,
+) -> dict[str, dict[str, float]]:
     grouped = (
         df.groupby(column)
         .agg(attrition_rate=("attrition", "mean"), count=("employee_id", "size"))
@@ -562,15 +783,13 @@ def _rate_table(df: pd.DataFrame, column: str, order: Optional[list[str]] = None
     if order is not None:
         grouped = grouped.reindex(order).dropna(how="all")
     else:
+        if limit is not None:
+            grouped = grouped.nlargest(limit, "count")
         grouped = grouped.sort_values("attrition_rate", ascending=False)
     return {
         str(index): {"rate": float(row["attrition_rate"]), "count": int(row["count"])}
         for index, row in grouped.fillna(0).iterrows()
     }
-
-
-def _value_or_zero(value: Optional[float]) -> float:
-    return float(value or 0.0)
 
 
 def _first_matching_metric(table: dict[str, dict[str, float]], labels: list[str]) -> Optional[float]:
@@ -764,8 +983,16 @@ def _build_layout_sections(
                     "title": "Workforce markers",
                     "items": [
                         {"label": "Overall attrition", "value": f"{summary['overall_attrition_rate']:.1f}%", "tone": "warning"},
-                        {"label": "Average engagement", "value": f"{summary['avg_engagement']:.2f}", "tone": "positive"},
-                        {"label": "Average salary", "value": f"${summary['avg_salary']:,.0f}", "tone": "default"},
+                        *(
+                            [{"label": "Average engagement", "value": f"{summary['avg_engagement']:.2f}", "tone": "positive"}]
+                            if summary["avg_engagement"] is not None
+                            else []
+                        ),
+                        *(
+                            [{"label": "Average salary", "value": f"${summary['avg_salary']:,.0f}", "tone": "default"}]
+                            if summary["avg_salary"] is not None
+                            else []
+                        ),
                         {"label": "Employees", "value": f"{summary['employee_count']:,}", "tone": "default"},
                     ],
                 },
@@ -779,6 +1006,41 @@ def _build_layout_sections(
         },
     }
 
+    section_map["compensation"]["blocks"].append(
+        {
+            "id": "salary-by-attrition",
+            "kind": "chart",
+            "chart": {
+                "id": "salary-by-attrition",
+                "title": "Average pay: leavers vs stayers",
+                "subtitle": "Compare within the same level and tenure before reading this as cause.",
+                "type": "bar",
+                "labels": signals["salary_by_attrition"]["labels"],
+                "series": [{"name": "Average salary", "values": signals["salary_by_attrition"]["values"], "color": "#0f766e"}],
+                "format": "currency",
+            },
+        }
+    )
+    dimension_colors = ["#9a3412", "#0f766e", "#b45309", "#292524"]
+    dimension_charts = [
+        {
+            "id": f"attrition-dimension-{index}",
+            "kind": "chart",
+            "chart": {
+                "id": f"attrition-dimension-{index}",
+                "title": f"Attrition by {table['column']}",
+                "subtitle": "Share of each group recorded as having left; very small groups are left out.",
+                "type": "bar",
+                "labels": table["labels"],
+                "series": [{"name": "Attrition rate", "values": table["values"], "color": dimension_colors[index % len(dimension_colors)]}],
+                "format": "percent",
+            },
+        }
+        for index, table in enumerate(signals["attrition_by_dimension"])
+    ]
+    section_map["retention"]["blocks"].extend(dimension_charts[:1])
+    section_map["workforce_model"]["blocks"][0:0] = dimension_charts[1:]
+
     layout_sections: list[dict[str, Any]] = []
     for section_id in included_sections:
         if section_id == "notes" and not show_notes:
@@ -786,6 +1048,7 @@ def _build_layout_sections(
         section = section_map.get(section_id)
         if section is not None:
             layout_sections.append(section)
+    layout_sections = prune_empty_blocks(layout_sections)
     return layout_sections
 
 

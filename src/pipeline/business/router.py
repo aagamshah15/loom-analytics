@@ -304,7 +304,7 @@ def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dic
     if kind == "marketing_campaign":
         return marketing_section_options(profile)
     if kind == "hr_workforce":
-        return hr_section_options()
+        return hr_section_options(analysis)
     if kind == "survey_sentiment":
         return survey_section_options(profile)
     if kind == "web_app_analytics":
@@ -474,8 +474,8 @@ def workflow_overview(kind: str, analysis: dict[str, Any]) -> dict[str, Any]:
             "metrics": [
                 ("Employees", f"{summary['employee_count']:,}"),
                 ("Attrition Rate", f"{summary['overall_attrition_rate']:.1f}%"),
-                ("Avg Engagement", f"{summary['avg_engagement']:.2f}"),
-                ("Average Salary", f"${summary['avg_salary']:,.0f}"),
+                ("Avg Engagement", "n/a" if summary["avg_engagement"] is None else f"{summary['avg_engagement']:.2f}"),
+                ("Average Salary", "n/a" if summary["avg_salary"] is None else f"${summary['avg_salary']:,.0f}"),
             ],
         }
     if kind == "survey_sentiment":
