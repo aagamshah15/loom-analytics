@@ -27,7 +27,7 @@ const TEMPLATE_BEST_FOR: Record<string, string> = {
   marketing_campaign: "Best for spend, clicks, conversion, and ROAS-style campaign tables.",
   survey_sentiment: "Best for rating-based feedback and response-level sentiment exports.",
   web_app_analytics: "Best for sessions, funnels, device behavior, and event analytics.",
-  generic: "Best when you want a safe fallback while Loom learns the right business shape.",
+  generic: "Works on any CSV: distributions, segments, trends, relationships, and data quality.",
 };
 
 const TEMPLATE_ICON_MAP = {
@@ -315,7 +315,7 @@ export function UploadHero({ onFileSelected, onAnalyze, file, templateOptions, d
           <div className="mt-8 grid gap-4 lg:grid-cols-2">
             <HelpCard
               title="Why didn't my file match a specialized template?"
-              body="Usually the CSV is missing a few key columns, uses unfamiliar names, or mixes multiple business entities in one table. Loom will stay generic rather than forcing the wrong story."
+              body="Usually the CSV is missing a few key columns, uses unfamiliar names, or mixes multiple business entities in one table. Loom builds a general dashboard instead of forcing the wrong story."
             />
             <HelpCard
               title="What if I upload the wrong file type?"
@@ -326,8 +326,8 @@ export function UploadHero({ onFileSelected, onAnalyze, file, templateOptions, d
               body="It does a deterministic re-ranking pass over the candidate insights. It changes emphasis and recommendation order, but it does not invent new unsupported analysis."
             />
             <HelpCard
-              title="Why am I seeing the generic fallback?"
-              body="Generic mode is the safe path when the dataset is incomplete, ambiguous, or not yet covered by a specialized template. It is a guardrail, not a failure state."
+              title="What do I get when no template matches?"
+              body="A general dashboard built from the file's own columns: how values are distributed, how groups compare, how things move over time, which measures move together, and how complete the data is."
             />
           </div>
 

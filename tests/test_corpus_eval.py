@@ -18,15 +18,23 @@ except ModuleNotFoundError:
     HAS_FASTAPI = False
 
 
-def scored(expected: list[str], detected: str | None, *, insights: int = 5, sections: int = 4, outcome: str | None = None) -> dict:
+def scored(
+    expected: list[str],
+    detected: str | None,
+    *,
+    insights: int = 5,
+    sections: int = 4,
+    dashboard: bool = True,
+    outcome: str | None = None,
+) -> dict:
     result = {
         "id": f"{'+'.join(expected) or 'unlabeled'}->{detected}",
         "expected": expected,
         "detected": detected,
         "profile": None,
-        "insights": insights if detected else 0,
-        "sections": sections if detected else 0,
-        "has_dashboard": bool(detected),
+        "insights": insights if dashboard else 0,
+        "sections": sections if dashboard else 0,
+        "has_dashboard": dashboard,
         "nearest": corpus_eval.explain_miss(["Order Date", "Sales", "Category", "Discount"]),
         "issue": "",
         "sha256": "same",
@@ -43,6 +51,8 @@ class CorpusEvalTests(unittest.TestCase):
         self.assertEqual(scored(["hr_workforce"], None)["outcome"], "missed")
         self.assertEqual(scored(["hr_workforce"], "survey_sentiment")["outcome"], "wrong_template")
         self.assertEqual(scored(["generic"], None)["outcome"], "generic")
+        self.assertEqual(scored(["generic"], None, sections=2)["outcome"], "generic_thin")
+        self.assertEqual(scored(["generic"], None, dashboard=False)["outcome"], "no_output")
         self.assertEqual(scored(["generic"], "ecommerce_orders")["outcome"], "wrong_template")
 
     def test_classify_accepts_any_listed_label_and_unlabeled_files(self) -> None:
@@ -60,10 +70,10 @@ class CorpusEvalTests(unittest.TestCase):
         results = [
             scored(["hr_workforce"], "hr_workforce"),
             scored(["hr_workforce"], None),
-            scored(["ecommerce_orders"], None),
+            scored(["ecommerce_orders"], None, dashboard=False),
             scored(["generic"], None),
             scored(["generic"], "ecommerce_orders"),
-            scored(["survey_sentiment"], None, outcome="unreadable"),
+            scored(["survey_sentiment"], None, dashboard=False, outcome="unreadable"),
         ]
         scorecard = corpus_eval.build_scorecard(results, not_fetched=["k-web-ab-data"])
 
@@ -71,7 +81,7 @@ class CorpusEvalTests(unittest.TestCase):
         self.assertEqual(rates["specialized_recall"], {"count": 1, "of": 4, "pct": 25.0})
         self.assertEqual(rates["generic_kept_generic"], {"count": 1, "of": 2, "pct": 50.0})
         self.assertEqual(rates["wrong_template"]["count"], 1)
-        self.assertEqual(rates["dashboard_output"], {"count": 2, "of": 5, "pct": 40.0})
+        self.assertEqual(rates["dashboard_output"], {"count": 4, "of": 5, "pct": 80.0})
         self.assertEqual(scorecard["per_kind"]["ecommerce_orders"]["false_positives"], 1)
         self.assertEqual(scorecard["missing_fields"]["ecommerce_orders"]["channel"], 1)
         self.assertIn("k-web-ab-data", corpus_eval.render_markdown(scorecard))

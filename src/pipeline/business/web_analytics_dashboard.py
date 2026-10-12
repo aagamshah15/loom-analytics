@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Optional
 
 import pandas as pd
 
-from pipeline.business.common import collect_insights, html_template, template_frame
+from pipeline.business.common import collect_insights, render_blueprint_html, template_frame
 from pipeline.common.contracts import PipelineContext
 
 
@@ -618,84 +617,4 @@ def _build_layout_sections(
 
 
 def _render_dashboard_html(payload: dict[str, Any]) -> str:
-    template = html_template(
-        """
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ payload.title }}</title>
-    <style>
-      body { font-family: Arial, sans-serif; background: #fafaf9; color: #1c1917; margin: 0; }
-      .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; }
-      .hero, .section { background: white; border: 1px solid #e7e5e4; border-radius: 20px; padding: 24px; margin-bottom: 20px; }
-      .eyebrow { text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; color: #78716c; }
-      h1, h2, h3 { margin: 0 0 12px; }
-      .grid { display: grid; gap: 16px; }
-      .grid.cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-      .card { border: 1px solid #e7e5e4; border-radius: 16px; padding: 16px; background: #fff; }
-      .insight { border-left: 4px solid #c2410c; background: #fff7ed; }
-      .note { background: #f5f5f4; }
-      .metric { font-size: 28px; font-weight: bold; margin-top: 8px; }
-      ul { margin: 0; padding-left: 18px; }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <section class="hero">
-        <div class="eyebrow">Loom Web Analytics Narrative</div>
-        <h1>{{ payload.title }}</h1>
-        <p>{{ payload.subtitle }}</p>
-      </section>
-      {% for section in payload.layout_sections %}
-      <section class="section">
-        <div class="eyebrow">{{ section.title }}</div>
-        <p>{{ section.description }}</p>
-        {% for block in section.blocks %}
-          {% if block.kind == "metric_grid" %}
-            <div class="grid cards">
-              {% for card in block.cards %}
-              <div class="card">
-                <div class="eyebrow">{{ card.label }}</div>
-                <div class="metric">{{ card.value }}</div>
-                <div>{{ card.sub }}</div>
-              </div>
-              {% endfor %}
-            </div>
-          {% elif block.kind == "insight_grid" or block.kind == "note_list" %}
-            <div class="grid cards">
-              {% for insight in block.insights %}
-              <div class="card {% if block.kind == 'insight_grid' %}insight{% else %}note{% endif %}">
-                <div class="eyebrow">{{ insight.category }}</div>
-                <h3>{{ insight.title }}</h3>
-                <p>{% if block.kind == "insight_grid" %}{{ insight.summary }}{% else %}{{ insight.detail }}{% endif %}</p>
-              </div>
-              {% endfor %}
-            </div>
-          {% elif block.kind == "chart" %}
-            <div class="card">
-              <div class="eyebrow">{{ block.chart.title }}</div>
-              <p>{{ block.chart.subtitle }}</p>
-              <ul>
-                {% for label in block.chart.labels %}
-                <li>{{ label }}: {{ block.chart.series[0].values[loop.index0] }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endif %}
-        {% endfor %}
-      </section>
-      {% endfor %}
-    </div>
-  </body>
-</html>
-        """
-    )
-    return template.render(payload=json.loads(json.dumps(payload, default=_json_default)))
-
-
-def _json_default(value: Any) -> Any:
-    if isinstance(value, pd.Timestamp):
-        return value.isoformat()
-    return str(value)
+    return render_blueprint_html(payload, eyebrow="Loom Web Analytics Narrative")

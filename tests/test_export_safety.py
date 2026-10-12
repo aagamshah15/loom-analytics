@@ -17,13 +17,15 @@ if str(TESTS_ROOT) not in sys.path:
 from pipeline.business import (
     ecommerce_dashboard,
     financial_dashboard,
+    generic_dashboard,
     healthcare_dashboard,
     hr_dashboard,
     marketing_dashboard,
     survey_dashboard,
     web_analytics_dashboard,
 )
-from pipeline.business.router import build_dashboard, build_insight_candidates, detect_business_context
+from pipeline.business.common import format_number
+from pipeline.business.router import analyze_for_kind, build_dashboard, build_insight_candidates, detect_business_context
 from pipeline.common.contracts import PipelineContext
 from template_generators import PROFILE_GENERATORS
 
@@ -35,6 +37,7 @@ RENDERERS = {
     "marketing_campaign": marketing_dashboard._render_dashboard_html,
     "survey_sentiment": survey_dashboard._render_dashboard_html,
     "web_app_analytics": web_analytics_dashboard._render_dashboard_html,
+    "generic": generic_dashboard._render_dashboard_html,
 }
 
 SCRIPT_TAG = "<script>alert(1)</script>"
@@ -61,23 +64,50 @@ class ExportSafetyTests(unittest.TestCase):
         for name, generator in PROFILE_GENERATORS.items():
             with self.subTest(profile=name):
                 frame = generator(rows=120)
-                detected = detect_business_context(PipelineContext(clean_df=frame, raw_df=frame))
+                context = PipelineContext(clean_df=frame, raw_df=frame)
+                detected = detect_business_context(context)
                 self.assertIsNotNone(detected)
-                review = build_insight_candidates(detected["kind"], detected["analysis"], "")
-                dashboard = build_dashboard(
-                    detected["kind"],
-                    detected["analysis"],
-                    approved_insight_ids=[item["id"] for item in review["insights"]],
-                    settings={},
-                )
+                # Every dataset can also be rendered by the generic template, so check both exports.
+                for business_context in (detected, analyze_for_kind(context, "generic")):
+                    kind = business_context["kind"]
+                    review = build_insight_candidates(kind, business_context["analysis"], "")
+                    dashboard = build_dashboard(
+                        kind,
+                        business_context["analysis"],
+                        approved_insight_ids=[item["id"] for item in review["insights"]],
+                        settings={},
+                    )
 
-                html = RENDERERS[detected["kind"]](poison(dashboard["payload"]))
+                    html = RENDERERS[kind](poison(dashboard["payload"]))
 
-                self.assertIn("alert(1)", html, "the poisoned text should still be rendered, escaped")
-                self.assertNotIn(SCRIPT_TAG, html)
-                self.assertNotIn("<img src=x", html)
-                # Exports that build markup in the browser must escape every interpolated field.
-                self.assertIsNone(re.search(r"\$\{(?!esc\()(?:card|insight|payload)\.", html))
+                    self.assertIn("alert(1)", html, "the poisoned text should still be rendered, escaped")
+                    self.assertNotIn(SCRIPT_TAG, html)
+                    self.assertNotIn("<img src=x", html)
+                    # Exports that build markup in the browser must escape every interpolated field.
+                    self.assertIsNone(re.search(r"\$\{(?!esc\()(?:card|insight|payload)\.", html))
+
+    def test_blueprint_exports_show_chart_values(self) -> None:
+        # The web and survey exports used to print every chart label with a blank value.
+        for name in ("web_analytics", "survey", "ecommerce"):
+            with self.subTest(profile=name):
+                frame = PROFILE_GENERATORS[name](rows=120)
+                context = PipelineContext(clean_df=frame, raw_df=frame)
+                business_context = detect_business_context(context) if name != "ecommerce" else analyze_for_kind(context, "generic")
+                dashboard = build_dashboard(business_context["kind"], business_context["analysis"], settings={})
+
+                charts = [
+                    block["chart"]
+                    for section in dashboard["payload"]["layout_sections"]
+                    for block in section["blocks"]
+                    if block["kind"] == "chart" and block["chart"]["labels"]
+                ]
+                self.assertGreater(len(charts), 0)
+                for chart in charts:
+                    if chart["type"] in {"line", "area"} and len(chart["labels"]) > 2:
+                        self.assertIn("<polyline", dashboard["html"])
+                        continue
+                    value = next(value for value in chart["series"][0]["values"] if value is not None)
+                    self.assertIn(f"<div>{format_number(value, chart.get('format', 'number'))}</div>", dashboard["html"])
 
 
 if __name__ == "__main__":

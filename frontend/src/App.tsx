@@ -66,7 +66,7 @@ const LANDING_TEMPLATE_FALLBACK: TemplateOption[] = [
   {
     kind: "generic",
     label: "Generic CSV",
-    description: "Fallback template when no specialized business template is ready.",
+    description: "A general dashboard for any CSV: distributions, segments, trends, relationships, and data quality.",
     implemented: true,
   },
 ];
@@ -208,7 +208,9 @@ function App() {
           ? `Approved insight blueprint for ${response.business_context.display_name}`
           : "Approved insight blueprint"
       );
-      setSectionOrder(defaultSectionsForReview(response.review.insights));
+      setSectionOrder(
+        response.business_context?.default_sections ?? defaultSectionsForReview(response.review.insights)
+      );
       setMetricCount(4);
       setShowNotes(true);
 
@@ -447,11 +449,11 @@ function UnsupportedTemplateState({ onRestart }: { onRestart: () => void }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-6">
       <div className="panel w-full p-8 text-center">
-        <p className="section-heading">Template coming soon</p>
-        <h2 className="editorial-heading mt-4 text-3xl font-bold">No specialized template is ready for this dataset yet</h2>
+        <p className="section-heading">Nothing to chart</p>
+        <h2 className="editorial-heading mt-4 text-3xl font-bold">Loom could not build a dashboard from this file</h2>
         <p className="mt-4 text-base leading-7 text-stone-600">
-          The new product UI is in place, but this dataset does not match one of the specialized templates that Loom
-          can render natively yet.
+          The file loaded, but Loom found no rows or columns it could summarize. Check that it has a header row and
+          at least one row of data, then try again.
         </p>
         <button className="primary-button mt-8" onClick={onRestart}>
           Start another upload

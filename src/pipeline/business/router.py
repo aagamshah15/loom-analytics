@@ -39,6 +39,12 @@ from pipeline.business.hr_dashboard import (
     build_hr_insight_candidates,
     dashboard_section_options as hr_section_options,
 )
+from pipeline.business.generic_dashboard import (
+    analyze_generic_context,
+    build_business_dashboard as build_generic_dashboard,
+    build_generic_insight_candidates,
+    dashboard_section_options as generic_section_options,
+)
 from pipeline.business.financial_dashboard import (
     analyze_financial_context,
     build_business_dashboard as build_financial_dashboard,
@@ -72,7 +78,10 @@ def detect_business_context(context: PipelineContext) -> Optional[dict[str, Any]
 
 def analyze_for_kind(context: PipelineContext, kind: str) -> Optional[dict[str, Any]]:
     if kind == "generic":
-        return _business_context("generic", "Generic CSV", 0.5, {})
+        analysis = _try_analyze(kind, analyze_generic_context, context)
+        if analysis is None:
+            return None
+        return _business_context("generic", "Generic CSV", 0.5, analysis)
     for template_kind, display_name, confidence, analyze in _TEMPLATES:
         if template_kind != kind:
             continue
@@ -92,6 +101,8 @@ def _business_context(kind: str, display_name: str, confidence: float, analysis:
         # What the UI needs to label the builder, so it does not keep its own copy.
         "sections": section_options(kind, analysis),
         "default_title": default_dashboard_title(kind),
+        # Sections to switch on before the user has chosen any. None means "those the insights point at".
+        "default_sections": list(section_options(kind, analysis)) if kind == "generic" else None,
     }
 
 
@@ -126,6 +137,8 @@ def build_insight_candidates(kind: str, analysis: dict[str, Any], user_prompt: s
         return build_survey_insight_candidates(analysis, user_prompt)
     if kind == "web_app_analytics":
         return build_web_analytics_insight_candidates(analysis, user_prompt)
+    if kind == "generic":
+        return build_generic_insight_candidates(analysis, user_prompt)
     return {"insights": [], "focus_tags": []}
 
 
@@ -185,6 +198,13 @@ def build_dashboard(
             user_prompt=user_prompt,
             settings=settings,
         )
+    if kind == "generic":
+        return build_generic_dashboard(
+            analysis=analysis,
+            approved_insight_ids=approved_insight_ids,
+            user_prompt=user_prompt,
+            settings=settings,
+        )
     return None
 
 
@@ -205,6 +225,8 @@ def section_options(kind: str, analysis: Optional[dict[str, Any]] = None) -> dic
         return survey_section_options(profile)
     if kind == "web_app_analytics":
         return web_analytics_section_options()
+    if kind == "generic":
+        return generic_section_options(analysis)
     return {}
 
 
@@ -420,6 +442,8 @@ def default_dashboard_title(kind: str) -> str:
         return "Survey Sentiment Hidden Insights"
     if kind == "web_app_analytics":
         return "Web Analytics Hidden Insights"
+    if kind == "generic":
+        return "Dataset Overview"
     return "Business Dashboard"
 
 
@@ -470,7 +494,7 @@ def template_catalog() -> list[dict[str, Any]]:
         {
             "kind": "generic",
             "label": "Generic CSV",
-            "description": "Fallback template when no specialized business template is ready.",
+            "description": "A general dashboard for any CSV: distributions, segments, trends, relationships, and data quality.",
             "implemented": True,
         },
     ]

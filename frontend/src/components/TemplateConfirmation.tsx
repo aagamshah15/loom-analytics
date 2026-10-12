@@ -45,9 +45,10 @@ export function TemplateConfirmation({
         </div>
 
         <h2 className="editorial-heading text-3xl font-bold">Confirm the business template</h2>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">
-          Loom matched the dataset to a specialized template. Keep it if it looks right, or override it before the
-          insight review begins.
+        <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600" data-testid="template-explanation">
+          {detectedTemplate
+            ? "Loom matched the dataset to a specialized template. Keep it if it looks right, or override it before the insight review begins."
+            : "No specialized template matched this dataset, so Loom will build a general dashboard from its columns. If you know one of the templates fits, pick it and apply the override."}
         </p>
 
         <div className="mt-8 grid gap-4">

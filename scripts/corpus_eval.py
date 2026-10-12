@@ -51,7 +51,8 @@ SPECIALIZED_KINDS = [
 
 # Outcomes, best to worst. "generic" means Loom correctly declined to pick a template.
 GOOD_OUTCOMES = {"ok", "generic"}
-ACCEPTABLE_OUTCOMES = GOOD_OUTCOMES | {"thin"}
+# Right template chosen, whatever the quality of what was built from it.
+ACCEPTABLE_OUTCOMES = GOOD_OUTCOMES | {"thin", "generic_thin", "no_output"}
 THIN_BELOW = 3
 
 # Required-column tables per template profile, used only to explain a miss. Survey's
@@ -89,6 +90,7 @@ def main() -> int:
         help="Extra folders or files of unlabeled CSVs. They are scored for output and crashes only.",
     )
     parser.add_argument("--fixtures", action="store_true", help="Also score the repo's labeled template fixtures.")
+    parser.add_argument("--skip-corpus", action="store_true", help="Score only --extra and --fixtures files.")
     parser.add_argument("--out", type=Path, default=PROJECT_ROOT / "output" / "corpus")
     parser.add_argument("--baseline", type=Path, help="A previous scorecard.json to diff against.")
     parser.add_argument("--fail-on-regression", action="store_true")
@@ -129,7 +131,7 @@ def _collect_targets(args: argparse.Namespace) -> tuple[list[dict[str, Any]], li
     not_fetched: list[str] = []
 
     root = corpus_dir()
-    for entry in load_manifest(args.manifest):
+    for entry in [] if args.skip_corpus else load_manifest(args.manifest):
         if args.only and entry["id"] not in args.only:
             continue
         path = entry_path(root, entry)
@@ -227,14 +229,18 @@ def evaluate_file(client: TestClient, target: dict[str, Any]) -> dict[str, Any]:
     result["nearest"] = explain_miss(result["columns"])
 
     business_context = payload.get("business_context")
-    if business_context is not None and business_context["kind"] != GENERIC:
+    if business_context is not None:
         insights = payload["review"]["insights"]
-        result["detected"] = business_context["kind"]
-        result["profile"] = business_context["analysis"].get("profile")
+        if business_context["kind"] != GENERIC:
+            result["detected"] = business_context["kind"]
+            result["profile"] = business_context["analysis"].get("profile")
         result["insights"] = len(insights)
         approved = [item["id"] for item in insights if item.get("recommended")] or [item["id"] for item in insights[:4]]
-        # Same defaults the React app sends: recommended insights approved, overview plus every insight's section.
-        included_sections = list(dict.fromkeys(["overview", *[item["section"] for item in insights]]))
+        # Same defaults the React app sends: recommended insights approved, and the template's default
+        # sections or else overview plus every insight's section.
+        included_sections = business_context.get("default_sections") or list(
+            dict.fromkeys(["overview", *[item["section"] for item in insights]])
+        )
 
         started = time.perf_counter()
         try:
@@ -271,15 +277,14 @@ def classify(result: dict[str, Any]) -> str:
     thin = result["insights"] < THIN_BELOW or result["sections"] < THIN_BELOW
     expected = result["expected"]
 
-    if not expected:  # unlabeled: only output quality can be judged
-        if detected == GENERIC:
-            return "generic"
-        return "thin" if thin else "ok"
-    if detected in expected:
-        if detected == GENERIC:
-            return "generic"
-        return "thin" if thin else "ok"
-    return "missed" if detected == GENERIC else "wrong_template"
+    if expected and detected not in expected:
+        return "missed" if detected == GENERIC else "wrong_template"
+    # Right template (or unlabeled, where only the output can be judged).
+    if detected == GENERIC:
+        if not result["has_dashboard"]:
+            return "no_output"
+        return "generic_thin" if thin else "generic"
+    return "thin" if thin else "ok"
 
 
 def explain_miss(columns: list[str]) -> dict[str, dict[str, Any]]:
@@ -330,7 +335,7 @@ def build_scorecard(results: list[dict[str, Any]], not_fetched: list[str]) -> di
 
     strict_specialized = [item for item in labeled if len(item["expected"]) == 1 and item["expected"][0] != GENERIC]
     should_be_generic = [item for item in labeled if item["expected"] == [GENERIC]]
-    detected_specialized = [item for item in results if item["detected"]]
+    with_dashboard = [item for item in results if item["has_dashboard"]]
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -356,7 +361,7 @@ def build_scorecard(results: list[dict[str, Any]], not_fetched: list[str]) -> di
                 sum(1 for item in should_be_generic if not item["detected"]), len(should_be_generic)
             ),
             "thin_dashboards": _rate(
-                sum(1 for item in detected_specialized if item["outcome"] == "thin"), len(detected_specialized)
+                sum(1 for item in with_dashboard if item["outcome"] in {"thin", "generic_thin"}), len(with_dashboard)
             ),
         },
         "per_kind": per_kind,
@@ -379,7 +384,7 @@ def render_summary(scorecard: dict[str, Any]) -> str:
         f"Acceptable result: {_format_rate(rates['acceptable_label'])} of labeled files",
         f"Wrong template: {_format_rate(rates['wrong_template'])} of labeled files",
         f"Generic files kept generic: {_format_rate(rates['generic_kept_generic'])}",
-        f"Thin dashboards: {_format_rate(rates['thin_dashboards'])} of detected templates",
+        f"Thin dashboards: {_format_rate(rates['thin_dashboards'])} of dashboards produced",
     ]
     return "\n".join(lines)
 
@@ -441,10 +446,13 @@ def print_baseline_diff(baseline: dict[str, Any], current: dict[str, Any]) -> li
             continue
         if before["sha256"] != item["sha256"]:
             changed_files.append(item["id"])
-        if before["outcome"] == item["outcome"]:
+        # Re-derive the old outcome with the current rules, so a change in how outcomes
+        # are named or ranked is not reported as a change in behavior.
+        before_outcome = before["outcome"] if before["outcome"] in {"crash", "unreadable"} else classify(before)
+        if before_outcome == item["outcome"]:
             continue
-        line = f"{item['id']}: {before['outcome']} -> {item['outcome']}"
-        if _outcome_rank(item["outcome"]) > _outcome_rank(before["outcome"]):
+        line = f"{item['id']}: {before_outcome} -> {item['outcome']}"
+        if _outcome_rank(item["outcome"]) > _outcome_rank(before_outcome):
             regressions.append(line)
         else:
             improvements.append(line)
@@ -460,7 +468,7 @@ def print_baseline_diff(baseline: dict[str, Any], current: dict[str, Any]) -> li
 
 
 def _outcome_rank(outcome: str) -> int:
-    order = ["ok", "generic", "thin", "missed", "wrong_template", "unreadable", "crash"]
+    order = ["ok", "generic", "thin", "generic_thin", "missed", "wrong_template", "no_output", "unreadable", "crash"]
     return order.index(outcome) if outcome in order else len(order)
 
 

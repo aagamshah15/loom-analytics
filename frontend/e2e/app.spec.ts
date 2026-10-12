@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ECOMMERCE_FIXTURE = path.resolve(CURRENT_DIR, "../../tests/fixtures/stress/ecommerce/happy_path.csv");
+const GENERIC_FIXTURE = path.resolve(CURRENT_DIR, "../../tests/fixtures/normal.csv");
 
 test("core Loom journey reaches preview and exports HTML", async ({ page }) => {
   await page.goto("/");
@@ -87,9 +88,36 @@ test("template override to generic still reaches review safely", async ({ page }
   await page.getByTestId("apply-template-override-button").click();
 
   await expect(page.getByTestId("review-screen")).toBeVisible();
-  await expect(page.getByTestId("build-dashboard-button")).toBeDisabled();
+  await expect(page.getByTestId("insight-card-dataset_shape")).toBeVisible();
+  await expect(page.getByTestId("build-dashboard-button")).toBeEnabled();
   await page.getByTestId("back-to-template-button").click();
   await expect(page.getByTestId("template-screen")).toBeVisible();
+});
+
+test("a CSV that matches no template still reaches preview and exports HTML", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("csv-file-input").setInputFiles(GENERIC_FIXTURE);
+  await page.getByTestId("analyze-csv-button").click();
+
+  await expect(page.getByTestId("template-screen")).toBeVisible();
+  await expect(page.getByTestId("template-explanation")).toContainText("No specialized template matched");
+  await page.getByTestId("continue-to-review-button").click();
+
+  await expect(page.getByTestId("review-screen")).toBeVisible();
+  await expect(page.getByTestId("build-dashboard-button")).toBeEnabled();
+  await page.getByTestId("build-dashboard-button").click();
+
+  await expect(page.getByTestId("builder-screen")).toBeVisible();
+  await expect(page.getByText("Charts: distributions")).toBeVisible();
+  await expect(page.getByText("Data quality", { exact: true })).toBeVisible();
+  await page.getByTestId("open-preview-button").click();
+
+  await expect(page.getByTestId("preview-screen")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dataset Overview" }).first()).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("download-html-button").click();
+  expect((await downloadPromise).suggestedFilename()).toBe("dataset_overview_dashboard.html");
 });
 
 test("invalid upload shows readable 400 error", async ({ page }) => {

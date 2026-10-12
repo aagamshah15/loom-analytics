@@ -299,6 +299,6 @@ Current React workflow:
 - Streamlit remains the prototype shell
 - React/Vite + FastAPI is now the proper frontend direction
 - The business layer includes seven specialized templates: financial time-series, e-commerce, healthcare, marketing, HR/workforce, survey/sentiment, and web/app analytics
-- A CSV that matches none of them currently ends at a "no specialized template" screen without a dashboard
+- A CSV that matches none of them gets a general dashboard built from its own columns: distributions, segments, trends, relationships, and data quality
 - Rule-based deterministic insights are implemented now
 - LLM narration and predictive models remain post-MVP

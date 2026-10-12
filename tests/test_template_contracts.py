@@ -86,6 +86,42 @@ class TemplateContractTests(unittest.TestCase):
                     f"{entry['path']} produced unexpected section ids",
                 )
 
+    def test_generic_template_covers_files_no_specialized_template_claims(self) -> None:
+        generic_fixtures = sorted(
+            path
+            for pattern in ("*.csv", "stress/generic/*.csv", "stress/*/ambiguous_schema.csv", "stress/*/partial_invalid.csv")
+            for path in self.fixtures_root.glob(pattern)
+        )
+        self.assertGreater(len(generic_fixtures), 15)
+
+        for path in generic_fixtures:
+            with self.subTest(path=str(path.relative_to(self.fixtures_root))):
+                context = run_pipeline(input_path=path, persist_outputs=False, include_visualizations=False)
+                if context.raw_df is None:
+                    continue  # empty and header-only files are rejected before any template runs
+                self.assertIsNone(detect_business_context(context))
+
+                generic = analyze_for_kind(context, "generic")
+                self.assertIsNotNone(generic, "every readable file should get a generic dashboard")
+                self.assertEqual(generic["default_sections"], list(generic["sections"]))
+                # The analysis travels to the browser and back, so it must be plain JSON: no NaN, no numpy types.
+                json.dumps(generic["analysis"], allow_nan=False)
+
+                insights = build_insight_candidates("generic", generic["analysis"], "")["insights"]
+                self.assertGreater(len(insights), 0)
+                self.assertTrue(any(item["recommended"] for item in insights))
+
+                dashboard = build_dashboard(
+                    "generic",
+                    generic["analysis"],
+                    approved_insight_ids=[item["id"] for item in insights if item["recommended"]],
+                    settings={"included_sections": generic["default_sections"], "show_notes": True},
+                )
+                section_ids = [section["id"] for section in dashboard["blueprint"]["layout_sections"]]
+                self.assertEqual(section_ids, generic["default_sections"])
+                self.assertGreaterEqual(len(section_ids), 3)
+                self.assertTrue(dashboard["html"])
+
 
 if __name__ == "__main__":
     unittest.main()

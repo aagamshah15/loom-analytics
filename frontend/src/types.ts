@@ -12,6 +12,8 @@ export type BusinessContext = {
   analysis: Record<string, unknown>;
   sections: Record<string, string>;
   default_title: string;
+  // Sections to switch on initially; null means "the ones the insights point at".
+  default_sections?: string[] | null;
 };
 
 export type InsightCandidate = {

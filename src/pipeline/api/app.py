@@ -19,6 +19,7 @@ from pipeline.business.router import (
     section_options,
     template_catalog,
 )
+from pipeline.common.contracts import PipelineContext
 from pipeline.common.reporting import build_report_dict
 from pipeline.run import run_pipeline
 
@@ -99,20 +100,18 @@ async def analyze_csv(
     else:
         business_context = detected
 
-    review = {"insights": [], "focus_tags": []}
-    if business_context is not None and business_context["kind"] != "generic":
-        try:
-            review = build_insight_candidates(business_context["kind"], business_context["analysis"], "")
-        except Exception as exc:
-            # A template that cannot describe this dataset should cost the user the template, not the upload.
-            logger.exception("Template %s failed while building insights", business_context["kind"])
-            context.metadata.setdefault("template_errors", []).append(
-                {"kind": business_context["kind"], "stage": "insights", "error": f"{type(exc).__name__}: {exc}"}
-            )
-            context.add_warning(f"The {business_context['display_name']} template could not be applied to this file.")
-            if detected is business_context:
-                detected = None
+    # Every readable CSV gets a dashboard: no specialized match, or a template that cannot
+    # describe this dataset, falls back to the generic template instead of a dead end.
+    review = _insights_or_none(context, business_context)
+    if review is None:
+        if business_context is not None and detected is not None and detected["kind"] == business_context["kind"]:
+            detected = None
+        if business_context is None or business_context["kind"] != "generic":
+            business_context = analyze_for_kind(context, "generic")
+            review = _insights_or_none(context, business_context)
+        if review is None:
             business_context = None
+            review = {"insights": [], "focus_tags": []}
 
     return jsonable_encoder(
         {
@@ -123,6 +122,20 @@ async def analyze_csv(
             "template_options": template_catalog(),
         }
     )
+
+
+def _insights_or_none(context: PipelineContext, business_context: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if business_context is None:
+        return None
+    try:
+        return build_insight_candidates(business_context["kind"], business_context["analysis"], "")
+    except Exception as exc:
+        logger.exception("Template %s failed while building insights", business_context["kind"])
+        context.metadata.setdefault("template_errors", []).append(
+            {"kind": business_context["kind"], "stage": "insights", "error": f"{type(exc).__name__}: {exc}"}
+        )
+        context.add_warning(f"The {business_context['display_name']} template could not be applied to this file.")
+        return None
 
 
 @app.post("/api/review")

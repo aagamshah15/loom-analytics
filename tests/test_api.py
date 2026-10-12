@@ -500,6 +500,52 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 422)
                 self.assertIn(expected_message, response.json()["detail"])
 
+    def test_unmatched_csv_gets_a_generic_dashboard(self) -> None:
+        fixture_path = PROJECT_ROOT / "tests" / "fixtures" / "normal.csv"
+        analyze_response = self.client.post(
+            "/api/analyze",
+            files={"file": (fixture_path.name, io.BytesIO(fixture_path.read_bytes()), "text/csv")},
+        )
+        self.assertEqual(analyze_response.status_code, 200)
+        payload = analyze_response.json()
+        self.assertIsNone(payload["detected_template"])
+        business_context = payload["business_context"]
+        self.assertEqual(business_context["kind"], "generic")
+        self.assertEqual(business_context["default_title"], "Dataset Overview")
+        self.assertGreaterEqual(len(payload["review"]["insights"]), 3)
+
+        build_response = self.client.post(
+            "/api/build-dashboard",
+            json={
+                "kind": "generic",
+                "analysis": business_context["analysis"],
+                "approved_insight_ids": [item["id"] for item in payload["review"]["insights"] if item["recommended"]],
+                "settings": {"included_sections": business_context["default_sections"], "show_notes": True},
+            },
+        )
+        self.assertEqual(build_response.status_code, 200)
+        dashboard = build_response.json()
+        self.assertEqual(
+            [section["id"] for section in dashboard["blueprint"]["layout_sections"]],
+            business_context["default_sections"],
+        )
+        self.assertIn("Dataset Overview", dashboard["html"])
+
+        prompted = self.client.post(
+            "/api/review",
+            json={"kind": "generic", "analysis": business_context["analysis"], "user_prompt": "focus on data quality"},
+        )
+        self.assertEqual(prompted.status_code, 200)
+        self.assertIn("quality", prompted.json()["focus_tags"])
+
+    def test_template_override_to_generic_returns_generic_insights(self) -> None:
+        response = self._post_fixture("ecommerce/happy_path.csv", template_override="generic")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["detected_template"]["kind"], "ecommerce_orders")
+        self.assertEqual(payload["business_context"]["kind"], "generic")
+        self.assertGreater(len(payload["review"]["insights"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
