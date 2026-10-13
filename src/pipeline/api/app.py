@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -27,6 +28,10 @@ from pipeline.run import run_pipeline
 logger = logging.getLogger(__name__)
 
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+# Analysis needs many times the file's size in memory. A small host should set this well
+# below the pipeline's own 50 MB ceiling, so a large upload is refused instead of killing the process.
+MAX_UPLOAD_MB = float(os.getenv("APP_MAX_UPLOAD_MB", "50"))
 
 
 def _cors_origins() -> list[str]:
@@ -67,10 +72,17 @@ async def analyze_csv(
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
+    if file.size is not None and file.size > MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"This file is {file.size / (1024 * 1024):.0f} MB. The limit is {MAX_UPLOAD_MB:.0f} MB.",
+        )
+
     with tempfile.TemporaryDirectory(prefix="loom-api-") as tmpdir:
         # The client-supplied filename is untrusted; never use it to build a path.
         input_path = Path(tmpdir) / "upload.csv"
-        input_path.write_bytes(await file.read())
+        with input_path.open("wb") as handle:
+            shutil.copyfileobj(file.file, handle)  # streamed, so the upload is not also held in memory
 
         context = run_pipeline(
             input_path=input_path,

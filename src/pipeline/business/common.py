@@ -432,25 +432,31 @@ def unfilled_frame(context: PipelineContext) -> Optional[pd.DataFrame]:
     raw = context.raw_df
     if raw is None:
         return template_frame(context)
-    clean = context.clean_df
-    frame = raw.copy()
-    for column in frame.columns:
-        series = frame[column]
-        cleaned = clean[column] if clean is not None and column in clean.columns else None
-        if cleaned is not None and pd.api.types.is_datetime64_any_dtype(cleaned):
-            frame[column] = pd.to_datetime(series, errors="coerce")
-        elif cleaned is not None and pd.api.types.is_numeric_dtype(cleaned) and not pd.api.types.is_numeric_dtype(series):
-            frame[column] = pd.to_numeric(series, errors="coerce")
-        elif not pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_datetime64_any_dtype(series):
-            frame[column] = tidy_labels(series)
-    return frame.drop_duplicates().reset_index(drop=True)
+    if context.unfilled_df is None:
+        clean = context.clean_df
+        frame = raw.copy()
+        for column in frame.columns:
+            series = frame[column]
+            cleaned = clean[column] if clean is not None and column in clean.columns else None
+            if cleaned is not None and pd.api.types.is_datetime64_any_dtype(cleaned):
+                frame[column] = pd.to_datetime(series, errors="coerce")
+            elif cleaned is not None and pd.api.types.is_numeric_dtype(cleaned) and not pd.api.types.is_numeric_dtype(series):
+                frame[column] = pd.to_numeric(series, errors="coerce")
+            elif not pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_datetime64_any_dtype(series):
+                frame[column] = tidy_labels(series)
+        context.unfilled_df = frame.drop_duplicates().reset_index(drop=True)
+    return context.unfilled_df
 
 
 def tidy_labels(series: pd.Series) -> pd.Series:
     """Trim whitespace and merge case variants ("Mobile", "mobile ") into their most common spelling."""
-    text = series.map(lambda value: value.strip() if isinstance(value, str) else value)
-    labels = text.dropna()
-    if labels.empty or labels.nunique() > 1000 or not labels.map(lambda value: isinstance(value, str)).all():
-        return text
-    spelling = labels.groupby(labels.str.lower()).agg(lambda group: group.value_counts().idxmax())
-    return text.map(lambda value: spelling[value.lower()] if isinstance(value, str) else value)
+    labels = series.dropna()
+    if labels.empty or pd.api.types.infer_dtype(labels, skipna=True) != "string":
+        return series
+    text = series.str.strip()
+    if text.nunique() > 1000:
+        return text  # free text or identifiers: nothing to merge
+    lowered = text.str.lower()
+    counts = text.groupby([lowered, text]).size()
+    spelling = counts.groupby(level=0).idxmax().map(lambda pair: pair[1])
+    return lowered.map(spelling)

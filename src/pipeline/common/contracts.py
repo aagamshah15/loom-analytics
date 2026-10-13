@@ -17,6 +17,8 @@ class PipelineContext:
     clean_df: Optional[pd.DataFrame] = None
     # clean_df plus the constant columns cleaning set aside; None when there were none.
     template_df: Optional[pd.DataFrame] = None
+    # The upload with types resolved but nothing filled in; built on first use by the business layer.
+    unfilled_df: Optional[pd.DataFrame] = None
     schema: dict[str, dict[str, Any]] = field(default_factory=dict)
     quality_report: dict[str, Any] = field(default_factory=dict)
     transform_log: list[dict[str, Any]] = field(default_factory=list)

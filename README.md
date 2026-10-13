@@ -263,9 +263,12 @@ Optional:
 
 ```bash
 APP_CORS_ORIGIN_REGEX=https://.*--loom-analytics.netlify.app
+APP_MAX_UPLOAD_MB=5
 ```
 
 Use the regex only if you also want Netlify preview deploys to talk to the backend.
+
+Set `APP_MAX_UPLOAD_MB` on a small instance. Analyzing a CSV takes many times its size in memory: a 10 MB file needs about 450 MB, which is more than a 512 MB instance has free, and the process is killed. With the limit set, a larger upload gets a clear message instead. The default is 50.
 
 ### Fast path
 

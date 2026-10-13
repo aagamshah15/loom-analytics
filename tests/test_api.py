@@ -68,6 +68,23 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["business_context"]["kind"], "ecommerce_orders")
         self.assertFalse(escaped_path.exists(), "upload was written outside the request's temp dir")
 
+    def test_upload_over_the_configured_limit_is_refused_before_analysis(self) -> None:
+        from pipeline.api import app as api_module
+
+        fixture_path = self.stress_fixtures / "ecommerce" / "happy_path.csv"
+        content = fixture_path.read_bytes()
+        original_limit = api_module.MAX_UPLOAD_MB
+        self.addCleanup(setattr, api_module, "MAX_UPLOAD_MB", original_limit)
+
+        api_module.MAX_UPLOAD_MB = len(content) / (1024 * 1024) / 2
+        refused = self.client.post("/api/analyze", files={"file": ("orders.csv", io.BytesIO(content), "text/csv")})
+        self.assertEqual(refused.status_code, 413)
+        self.assertIn("The limit is", refused.json()["detail"])
+
+        api_module.MAX_UPLOAD_MB = original_limit
+        accepted = self.client.post("/api/analyze", files={"file": ("orders.csv", io.BytesIO(content), "text/csv")})
+        self.assertEqual(accepted.status_code, 200)
+
     def test_analyze_accepts_utf8_bom_fixture(self) -> None:
         csv_data = (
             "\ufefforder_date,order_value,category,channel,payment_method,device,discount_pct,returned,customer_id\n"

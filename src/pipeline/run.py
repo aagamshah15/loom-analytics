@@ -15,7 +15,6 @@ from pipeline.common.reporting import write_reports
 from pipeline.ingestion.ingestion import run_ingestion
 from pipeline.insights.insights import generate_insights
 from pipeline.validation.validation import run_validation
-from pipeline.visualization.visualization import generate_visualizations
 
 
 def run_pipeline(
@@ -54,6 +53,9 @@ def run_pipeline(
             _run_stage("cleaning", context, logger, run_cleaning, config)
             _run_stage("analysis", context, logger, run_analysis, config)
             if include_visualizations:
+                # Imported here: matplotlib and seaborn add about 80 MB, and the API never draws charts.
+                from pipeline.visualization.visualization import generate_visualizations
+
                 _run_stage("visualization", context, logger, generate_visualizations, config)
             _run_stage("insights", context, logger, generate_insights, config)
     except PipelineExecutionError as exc:
