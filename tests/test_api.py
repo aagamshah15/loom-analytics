@@ -68,6 +68,42 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["business_context"]["kind"], "ecommerce_orders")
         self.assertFalse(escaped_path.exists(), "upload was written outside the request's temp dir")
 
+    def test_health_check_answers_while_an_analysis_is_running(self) -> None:
+        import threading
+        import time
+
+        from pipeline.api import app as api_module
+
+        started, release = threading.Event(), threading.Event()
+        original = api_module.run_pipeline
+
+        def slow_pipeline(**kwargs):
+            started.set()
+            release.wait(timeout=10)
+            return original(**kwargs)
+
+        api_module.run_pipeline = slow_pipeline
+        self.addCleanup(setattr, api_module, "run_pipeline", original)
+        self.addCleanup(release.set)
+
+        fixture = (self.stress_fixtures / "ecommerce" / "happy_path.csv").read_bytes()
+        with TestClient(app) as client:
+            result: dict = {}
+            upload = threading.Thread(
+                target=lambda: result.update(response=client.post("/api/analyze", files={"file": ("o.csv", io.BytesIO(fixture), "text/csv")}))
+            )
+            upload.start()
+            self.assertTrue(started.wait(timeout=10), "the analysis never started")
+
+            began = time.perf_counter()
+            health = client.get("/api/health")
+            self.assertEqual(health.status_code, 200)
+            self.assertLess(time.perf_counter() - began, 2.0, "health check waited for the analysis")
+
+            release.set()
+            upload.join(timeout=20)
+            self.assertEqual(result["response"].status_code, 200)
+
     def test_upload_over_the_configured_limit_is_refused_before_analysis(self) -> None:
         from pipeline.api import app as api_module
 

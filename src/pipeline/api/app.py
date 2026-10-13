@@ -63,8 +63,11 @@ def get_templates() -> dict[str, Any]:
     return {"templates": template_catalog()}
 
 
+# A plain function, not a coroutine: FastAPI then runs it on a worker thread. Analysis is
+# CPU-bound and can take many seconds; as a coroutine it blocked the event loop, so the
+# host's health check went unanswered and the instance was restarted mid-request.
 @app.post("/api/analyze")
-async def analyze_csv(
+def analyze_csv(
     file: UploadFile = File(...),
     validate_only: bool = Form(False),
     template_override: Optional[str] = Form(None),
